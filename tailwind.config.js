@@ -1,0 +1,51 @@
+/** @type {import('tailwindcss').Config} */
+module.exports = {
+  content: ['./app/**/*.{js,jsx,ts,tsx}', './src/**/*.{js,jsx,ts,tsx}'],
+  presets: [require('nativewind/preset')],
+  theme: {
+    extend: {
+      colors: {
+        bg: '#efeeec',
+        surface: '#ffffff',
+        'surface-2': '#f5f4f2',
+        ink: '#0e0e10',
+        'ink-2': '#5a5a60',
+        'ink-3': '#9a9aa1',
+        line: '#e3e2df',
+        'line-2': '#d4d3cf',
+        accent: '#ff5a1f',
+        success: '#1f9d57',
+        'success-dark': '#46c97e',
+        warning: '#e5793a',
+        danger: '#e5484d',
+        // dark mode
+        'dark-bg': '#08080a',
+        'dark-surface': '#131316',
+        'dark-surface-2': '#1b1b1f',
+        'dark-ink': '#f3f3f4',
+        'dark-ink-2': '#a2a2a9',
+        'dark-ink-3': '#67676e',
+        'dark-line': '#26262b',
+        'dark-line-2': '#303036',
+      },
+      fontFamily: {
+        archivo: ['Archivo_800ExtraBold'],
+        'archivo-black': ['Archivo_900Black'],
+        hanken: ['HankenGrotesk_400Regular'],
+        'hanken-medium': ['HankenGrotesk_500Medium'],
+        'hanken-semibold': ['HankenGrotesk_600SemiBold'],
+        'hanken-bold': ['HankenGrotesk_700Bold'],
+        'hanken-extrabold': ['HankenGrotesk_800ExtraBold'],
+      },
+      borderRadius: {
+        card: '16px',
+        'card-sm': '10px',
+        'card-a': '4px',
+        'card-sm-a': '3px',
+        'card-b': '22px',
+        'card-sm-b': '14px',
+      },
+    },
+  },
+  plugins: [],
+};
