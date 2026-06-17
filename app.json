@@ -9,7 +9,10 @@
     "scheme": "ascentio",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.anonymous.ascentiomobile"
+      "bundleIdentifier": "com.anonymous.ascentiomobile",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -34,10 +37,16 @@
           "faceIDPermission": "Allow Ascentio to use Face ID."
         }
       ],
-      "expo-apple-authentication"
+"expo-splash-screen",
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "d1b4c973-825b-483f-8ea2-8d9a7849e3a6"
+      }
     }
   }
 }
