@@ -7,6 +7,9 @@
     "development": {
       "developmentClient": true,
       "distribution": "internal",
+      "ios": {
+        "simulator": false
+      },
       "env": {
         "EXPO_PUBLIC_API_URL": "https://app.ascentio.com.br/api",
         "EXPO_PUBLIC_BETTER_AUTH_URL": "https://app.ascentio.com.br/auth"
@@ -24,6 +27,9 @@
       "env": {
         "EXPO_PUBLIC_API_URL": "https://app.ascentio.com.br/api",
         "EXPO_PUBLIC_BETTER_AUTH_URL": "https://app.ascentio.com.br/auth"
+      },
+      "ios": {
+        "buildConfiguration": "Release"
       }
     }
   },

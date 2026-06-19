@@ -37,7 +37,8 @@
           "faceIDPermission": "Allow Ascentio to use Face ID."
         }
       ],
-      "expo-apple-authentication"
+      "expo-splash-screen",
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true
