@@ -1,24 +1,30 @@
 import React from 'react';
 import NetInfo from '@react-native-community/netinfo';
-import { useWorkoutStore } from '@/store/workout.store';
+import { useOfflineStore } from '@/store/offline.store';
 import { useLogWorkout } from './useWorkouts';
+import type { WorkoutInput } from '@/types/api';
 
 export function useWorkoutSync() {
-  const { pendingSync, dequeuePending } = useWorkoutStore();
+  const { queue, dequeue } = useOfflineStore();
   const logWorkout = useLogWorkout();
+
+  const pendingWorkouts = queue.filter((m) => m.type === 'LOG_WORKOUT');
 
   React.useEffect(() => {
     const unsubscribe = NetInfo.addEventListener(async (state) => {
-      if (!state.isConnected || pendingSync.length === 0) return;
+      if (!state.isConnected || pendingWorkouts.length === 0) return;
+      const processed: string[] = [];
       try {
-        for (const input of pendingSync) {
-          await logWorkout.mutateAsync(input);
+        for (const mutation of pendingWorkouts) {
+          await logWorkout.mutateAsync(mutation.payload as WorkoutInput);
+          processed.push(mutation.id);
         }
-        dequeuePending(pendingSync.length);
       } catch {
         // será retentado na próxima reconexão
+      } finally {
+        if (processed.length > 0) dequeue(processed);
       }
     });
     return unsubscribe;
-  }, [pendingSync]);
+  }, [pendingWorkouts]);
 }

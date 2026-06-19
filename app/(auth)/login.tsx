@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, ScrollView, TouchableOpacity, Platform } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, Platform, KeyboardAvoidingView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
@@ -9,7 +9,21 @@ import { Logo } from '@/components/shared/Logo';
 import { Btn } from '@/components/shared/Btn';
 import { Field, StyledInput } from '@/components/shared/Field';
 import { useAuthStore, type UserRole } from '@/store/auth.store';
-import { authClient, persistToken } from '@/lib/auth';
+import { authClient, persistToken, persistRememberMeToken } from '@/lib/auth';
+
+const API_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
+
+async function fetchRememberMeToken() {
+  try {
+    const res = await fetch(`${API_URL}/remember-me`, { method: 'POST' });
+    if (res.ok) {
+      const { token } = await res.json();
+      if (token) await persistRememberMeToken(token);
+    }
+  } catch {
+    // não crítico — usuário ainda está autenticado online
+  }
+}
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -55,6 +69,7 @@ export default function LoginScreen() {
       const user = (data as any).user;
       const role: UserRole = user?.role === 'COACH' ? 'COACH' : 'STUDENT';
       setSession(user?.id ?? '', user?.email ?? email, role);
+      await fetchRememberMeToken();
       router.replace(role === 'COACH' ? '/(coach)' : '/(app)');
     } catch (e: any) {
       setError(e?.message ?? 'Falha no login. Tente novamente.');
@@ -69,6 +84,7 @@ export default function LoginScreen() {
     const user = (data as any)?.user;
     const role: UserRole = user?.role === 'COACH' ? 'COACH' : 'STUDENT';
     setSession(user?.id ?? '', user?.email ?? '', role);
+    await fetchRememberMeToken();
     router.replace(role === 'COACH' ? '/(coach)' : '/(app)');
   }
 
@@ -145,6 +161,10 @@ export default function LoginScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={{ flex: 1 }}
+      >
       <ScrollView
         contentContainerStyle={{
           flexGrow: 1,
@@ -284,6 +304,7 @@ export default function LoginScreen() {
           </View>
         </View>
       </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }

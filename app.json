@@ -9,7 +9,10 @@
     "scheme": "ascentio",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.anonymous.ascentiomobile"
+      "bundleIdentifier": "com.anonymous.ascentiomobile",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -38,6 +41,12 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "d1b4c973-825b-483f-8ea2-8d9a7849e3a6"
+      }
     }
   }
 }

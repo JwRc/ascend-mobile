@@ -1,4 +1,6 @@
 import { create } from 'zustand';
+import { clearToken, clearRememberMeToken } from '@/lib/auth';
+import { useOfflineStore } from './offline.store';
 
 export type UserRole = 'STUDENT' | 'COACH';
 
@@ -8,8 +10,16 @@ type AuthState = {
   userId: string | null;
   email: string | null;
   role: UserRole | null;
-  setSession: (userId: string, email: string, role: UserRole) => void;
-  clearSession: () => void;
+  plan: 'BASE' | 'CUSTOM' | null;
+  offlineGraceUntil: number | null;
+  isOfflineSession: boolean;
+  setSession: (
+    userId: string,
+    email: string,
+    role: UserRole,
+    opts?: { plan?: 'BASE' | 'CUSTOM'; offlineGraceUntil?: number; isOfflineSession?: boolean },
+  ) => void;
+  clearSession: () => Promise<void>;
   markHydrated: () => void;
 };
 
@@ -19,12 +29,35 @@ export const useAuthStore = create<AuthState>((set) => ({
   userId: null,
   email: null,
   role: null,
+  plan: null,
+  offlineGraceUntil: null,
+  isOfflineSession: false,
 
-  setSession: (userId, email, role) =>
-    set({ isAuthenticated: true, userId, email, role }),
+  setSession: (userId, email, role, opts) =>
+    set({
+      isAuthenticated: true,
+      userId,
+      email,
+      role,
+      plan: opts?.plan ?? null,
+      offlineGraceUntil: opts?.offlineGraceUntil ?? null,
+      isOfflineSession: opts?.isOfflineSession ?? false,
+    }),
 
-  clearSession: () =>
-    set({ isAuthenticated: false, userId: null, email: null, role: null }),
+  clearSession: async () => {
+    await clearToken();
+    await clearRememberMeToken();
+    useOfflineStore.getState().clearAll();
+    set({
+      isAuthenticated: false,
+      userId: null,
+      email: null,
+      role: null,
+      plan: null,
+      offlineGraceUntil: null,
+      isOfflineSession: false,
+    });
+  },
 
   markHydrated: () => set({ hydrated: true }),
 }));

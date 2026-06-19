@@ -84,6 +84,8 @@ export default function OnboardingScreen() {
   }
 
   async function finish() {
+    const minW = u === 'kg' ? 30 : 66;
+    const maxW = u === 'kg' ? 250 : 550;
     await updateProfile.mutateAsync({
       name: d.name.trim() || 'Atleta',
       units: d.units,
@@ -93,7 +95,7 @@ export default function OnboardingScreen() {
     });
     const goalType =
       d.goalType === 'lose' ? 'LOSE' : d.goalType === 'strength' ? 'GAIN' : 'MAINTAIN';
-    await setGoal.mutateAsync({ targetWeight: round1(d.goal), goalType });
+    await setGoal.mutateAsync({ targetWeight: round1(Math.min(maxW, Math.max(minW, d.goal))), goalType });
     router.replace('/(app)');
   }
 
@@ -112,7 +114,7 @@ export default function OnboardingScreen() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }}>
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={{ flex: 1 }}
       >
         <View

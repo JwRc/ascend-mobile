@@ -31,7 +31,6 @@ export type ActiveWorkoutSession = {
 
 type WorkoutStore = {
   activeSession: ActiveWorkoutSession | null;
-  pendingSync: WorkoutInput[];
 
   startSession: (params: {
     templateId: string | null;
@@ -48,8 +47,6 @@ type WorkoutStore = {
   addSet: (exerciseName: string, set: ActiveSet) => void;
   discardSession: () => void;
   buildWorkoutInput: () => WorkoutInput | null;
-  enqueuePending: (input: WorkoutInput) => void;
-  dequeuePending: (count: number) => void;
   clearSession: () => void;
 };
 
@@ -59,7 +56,6 @@ function uid() {
 
 export const useWorkoutStore = create<WorkoutStore>((set, get) => ({
   activeSession: null,
-  pendingSync: [],
 
   startSession: ({ templateId, templateName, programId, programName, exerciseNames, targetMin, yolo }) =>
     set({
@@ -151,10 +147,4 @@ export const useWorkoutStore = create<WorkoutStore>((set, get) => ({
   discardSession: () => set({ activeSession: null }),
 
   clearSession: () => set({ activeSession: null }),
-
-  enqueuePending: (input) =>
-    set((s) => ({ pendingSync: [...s.pendingSync, input] })),
-
-  dequeuePending: (count) =>
-    set((s) => ({ pendingSync: s.pendingSync.slice(count) })),
 }));

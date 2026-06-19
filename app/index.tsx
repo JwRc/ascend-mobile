@@ -1,36 +1,19 @@
 import React from 'react';
 import { View, Text } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
+import { Redirect } from 'expo-router';
 import { useTheme } from '@/theme';
 import { Logo } from '@/components/shared/Logo';
 import { Btn } from '@/components/shared/Btn';
-import { useAuthStore, type UserRole } from '@/store/auth.store';
-import { authClient } from '@/lib/auth';
+import { useAuthStore } from '@/store/auth.store';
 
 export default function WelcomeScreen() {
   const { colors, direction } = useTheme();
-  const { setSession, markHydrated } = useAuthStore();
+  const { isAuthenticated, role } = useAuthStore();
 
-  React.useEffect(() => {
-    async function restoreSession() {
-      try {
-        const { data } = await authClient.getSession();
-        if (data?.session && data?.user) {
-          const u = data.user as { id: string; email: string; role?: string };
-          const role: UserRole = u.role === 'COACH' ? 'COACH' : 'STUDENT';
-          setSession(u.id, u.email, role);
-          router.replace(role === 'COACH' ? '/(coach)' : '/(app)');
-          return;
-        }
-      } catch {
-        // no session
-      } finally {
-        markHydrated();
-      }
-    }
-    restoreSession();
-  }, []);
+  if (isAuthenticated) {
+    return <Redirect href={role === 'COACH' ? '/(coach)' : '/(app)'} />;
+  }
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }}>

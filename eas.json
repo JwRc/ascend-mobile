@@ -1,0 +1,33 @@
+{
+  "cli": {
+    "version": ">= 20.2.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://app.ascentio.com.br/api",
+        "EXPO_PUBLIC_BETTER_AUTH_URL": "https://app.ascentio.com.br/auth"
+      }
+    },
+    "preview": {
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://app.ascentio.com.br/api",
+        "EXPO_PUBLIC_BETTER_AUTH_URL": "https://app.ascentio.com.br/auth"
+      }
+    },
+    "production": {
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://app.ascentio.com.br/api",
+        "EXPO_PUBLIC_BETTER_AUTH_URL": "https://app.ascentio.com.br/auth"
+      }
+    }
+  },
+  "submit": {
+    "production": {}
+  }
+}

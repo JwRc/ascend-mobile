@@ -28,6 +28,8 @@ export function GoalEditModal({ visible, unit, goal, goalType, onSave, onClose }
   const { colors, radius } = useTheme();
   const [g, setG] = React.useState(goal);
   const [gt, setGt] = React.useState<GoalType>(goalType);
+  const minW = unit === 'kg' ? 30 : 66;
+  const maxW = unit === 'kg' ? 250 : 550;
 
   return (
     <AppModal visible={visible} onClose={onClose} title="Editar meta">
@@ -77,7 +79,7 @@ export function GoalEditModal({ visible, unit, goal, goalType, onSave, onClose }
         Atualizar aqui marca a meta como definida por você.
       </Text>
 
-      <Btn kind="primary" full onPress={() => onSave(round1(g), gt)}>
+      <Btn kind="primary" full onPress={() => onSave(round1(Math.min(maxW, Math.max(minW, g))), gt)}>
         Salvar meta
       </Btn>
     </AppModal>

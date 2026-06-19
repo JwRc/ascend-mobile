@@ -22,6 +22,8 @@ export function LogModal({ visible, unit, lastWeight, entries, onSave, onClose }
   const { colors } = useTheme();
   const [date, setDate] = React.useState(todayISO());
   const [weight, setWeight] = React.useState(lastWeight ?? (unit === 'kg' ? 75 : 165));
+  const minW = unit === 'kg' ? 30 : 66;
+  const maxW = unit === 'kg' ? 250 : 550;
 
   const existing = entries.find((e) => e.date === date);
 
@@ -57,7 +59,7 @@ export function LogModal({ visible, unit, lastWeight, entries, onSave, onClose }
         </Text>
       )}
 
-      <Btn kind="primary" full onPress={() => onSave(date, round1(weight))}>
+      <Btn kind="primary" full onPress={() => onSave(date, round1(Math.min(maxW, Math.max(minW, weight))))}>
         {existing ? 'Atualizar registro' : 'Salvar registro'}
       </Btn>
     </AppModal>

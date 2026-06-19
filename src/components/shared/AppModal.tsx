@@ -19,17 +19,20 @@ export function AppModal({ visible, onClose, title, children }: Props) {
       animationType="slide"
       onRequestClose={onClose}
     >
-      <TouchableOpacity
-        activeOpacity={1}
-        onPress={onClose}
-        style={{
-          flex: 1,
-          backgroundColor: 'rgba(0,0,0,0.5)',
-          justifyContent: 'flex-end',
-          padding: 16,
-        }}
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={{ flex: 1 }}
       >
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <TouchableOpacity
+          activeOpacity={1}
+          onPress={onClose}
+          style={{
+            flex: 1,
+            backgroundColor: 'rgba(0,0,0,0.5)',
+            justifyContent: 'flex-end',
+            padding: 16,
+          }}
+        >
           <TouchableOpacity activeOpacity={1}>
             <View
               style={{
@@ -72,8 +75,8 @@ export function AppModal({ visible, onClose, title, children }: Props) {
               </ScrollView>
             </View>
           </TouchableOpacity>
-        </KeyboardAvoidingView>
-      </TouchableOpacity>
+        </TouchableOpacity>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
