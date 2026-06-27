@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Redirect } from 'expo-router';
+import { Redirect, router } from 'expo-router';
 import { useTheme } from '@/theme';
 import { Logo } from '@/components/shared/Logo';
 import { Btn } from '@/components/shared/Btn';
@@ -12,6 +12,7 @@ export default function WelcomeScreen() {
   const { isAuthenticated, role } = useAuthStore();
 
   if (isAuthenticated) {
+    console.log('WelcomeScreen: isAuthenticated, role', isAuthenticated, role);
     return <Redirect href={role === 'COACH' ? '/(coach)' : '/(app)'} />;
   }
 
@@ -79,6 +80,9 @@ export default function WelcomeScreen() {
             <Btn kind="primary" full onPress={() => router.push('/(auth)/login')}>
               Entrar
             </Btn>
+            <Btn kind="ghost" full onPress={() => router.push('/(signup)/plan')}>
+              Criar conta
+            </Btn>
           </View>
 
           <Text
@@ -91,7 +95,7 @@ export default function WelcomeScreen() {
               lineHeight: 20,
             }}
           >
-            Atletas entram por convite — abra o link que seu coach enviou.
+            Aluno convidado? Abra o link que seu coach enviou.
           </Text>
         </View>
 

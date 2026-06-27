@@ -32,7 +32,7 @@ const APP_SCHEME = 'ascentio';
 
 export default function LoginScreen() {
   const { colors, radius, direction } = useTheme();
-  const { setSession } = useAuthStore();
+  const { setSession, setSubscriptionExpired } = useAuthStore();
   const [email, setEmail] = React.useState('');
   const [password, setPassword] = React.useState('');
   const [error, setError] = React.useState('');
@@ -61,6 +61,12 @@ export default function LoginScreen() {
         password,
       });
       if (authError || !data) {
+        const status = (authError as any)?.status ?? (authError as any)?.statusCode;
+        if (status === 402) {
+          setSubscriptionExpired(true);
+          router.replace('/(billing)');
+          return;
+        }
         setError(authError?.message ?? 'Falha no login. Tente novamente.');
         return;
       }
@@ -72,6 +78,12 @@ export default function LoginScreen() {
       await fetchRememberMeToken();
       router.replace(role === 'COACH' ? '/(coach)' : '/(app)');
     } catch (e: any) {
+      const status = e?.status ?? e?.response?.status ?? e?.statusCode;
+      if (status === 402) {
+        setSubscriptionExpired(true);
+        router.replace('/(billing)');
+        return;
+      }
       setError(e?.message ?? 'Falha no login. Tente novamente.');
     } finally {
       setLoading(false);
@@ -94,7 +106,7 @@ export default function LoginScreen() {
     try {
       const callbackURL = `${APP_SCHEME}://auth-callback`;
       // Request the OAuth redirect URL from better-auth
-      const res = await fetch(`${BETTER_AUTH_URL}/api/auth/sign-in/social`, {
+      const res = await fetch(`${BETTER_AUTH_URL}/auth/sign-in/social`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ provider: 'google', callbackURL }),
@@ -132,7 +144,7 @@ export default function LoginScreen() {
         return;
       }
       // Send the identity token to better-auth for verification
-      const res = await fetch(`${BETTER_AUTH_URL}/api/auth/sign-in/social`, {
+      const res = await fetch(`${BETTER_AUTH_URL}/auth/sign-in/social`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -178,7 +190,7 @@ export default function LoginScreen() {
         }}
         keyboardShouldPersistTaps="handled"
       >
-        <TouchableOpacity onPress={() => router.back()} style={{ paddingVertical: 6, alignSelf: 'flex-start' }}>
+        <TouchableOpacity onPress={() => router.canGoBack() ? router.back() : router.replace('/')} style={{ paddingVertical: 6, alignSelf: 'flex-start' }}>
           <Text style={{ fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 14, color: colors.ink2 }}>
             ← Voltar
           </Text>

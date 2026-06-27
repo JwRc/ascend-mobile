@@ -1,7 +1,7 @@
 import React from 'react';
-import { View, Text, ActivityIndicator } from 'react-native';
+import { View, Text, ActivityIndicator, BackHandler, TouchableOpacity, StyleSheet } from 'react-native';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTheme } from '@/theme';
 import { Logo } from '@/components/shared/Logo';
@@ -11,7 +11,7 @@ import { CoachRoster } from '@/components/coach/CoachRoster';
 import { CoachPrograms } from '@/components/coach/CoachPrograms';
 import { InviteModal } from '@/components/coach/InviteModal';
 import { useAuthStore } from '@/store/auth.store';
-import { authClient, clearToken } from '@/lib/auth';
+import { authClient } from '@/lib/auth';
 import {
   COACH_ACCOUNT,
   billingFor,
@@ -96,9 +96,20 @@ export default function CoachHomeScreen() {
   const queryClient = useQueryClient();
   const { clearSession } = useAuthStore();
 
+  useFocusEffect(
+    React.useCallback(() => {
+      const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+        BackHandler.exitApp();
+        return true;
+      });
+      return () => sub.remove();
+    }, [])
+  );
+
   const [tab, setTab] = React.useState<Tab>('overview');
   const [inviteOpen, setInviteOpen] = React.useState(false);
   const [rosterFilter, setRosterFilter] = React.useState<string | undefined>(undefined);
+  const [menuOpen, setMenuOpen] = React.useState(false);
 
   // API queries
   const { data: dashboard, isLoading: dashLoading } = useCoachDashboard();
@@ -133,10 +144,9 @@ export default function CoachHomeScreen() {
 
   async function handleLogout() {
     try { await authClient.signOut(); } catch { /* ignore */ }
-    await clearToken();
-    clearSession();
+    await clearSession();
     queryClient.clear();
-    router.replace('/');
+    router.replace('/(auth)/login');
   }
 
   function handleInvite(payload: {
@@ -152,8 +162,9 @@ export default function CoachHomeScreen() {
       contact: payload.email,
       units: payload.units,
       programId: payload.programId,
+    }, {
+      onSuccess: () => setInviteOpen(false),
     });
-    setInviteOpen(false);
   }
 
   function handleUpdateGoal(athleteId: string, goal: number) {
@@ -235,22 +246,63 @@ export default function CoachHomeScreen() {
           <Text style={{ fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 12.5, color: colors.ink3 }}>
             R$ {billingFor(activeCount).total}/mês
           </Text>
-          <View
-            style={{
-              width: 34,
-              height: 34,
-              borderRadius: 17,
-              backgroundColor: colors.ink,
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            <Text style={{ fontFamily: 'Archivo_800ExtraBold', fontSize: 13, color: colors.bg }}>
-              {COACH_ACCOUNT.coachName.slice(0, 1)}
-            </Text>
-          </View>
+          <TouchableOpacity onPress={() => setMenuOpen(!menuOpen)}>
+            <View
+              style={{
+                width: 34,
+                height: 34,
+                borderRadius: 17,
+                backgroundColor: colors.ink,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Text style={{ fontFamily: 'Archivo_800ExtraBold', fontSize: 13, color: colors.bg }}>
+                {COACH_ACCOUNT.coachName.slice(0, 1)}
+              </Text>
+            </View>
+          </TouchableOpacity>
         </View>
       </View>
+
+      {menuOpen && (
+        <TouchableOpacity
+          style={[StyleSheet.absoluteFill, { zIndex: 20 }]}
+          onPress={() => setMenuOpen(false)}
+          activeOpacity={1}
+        />
+      )}
+
+      {menuOpen && (
+        <View
+          style={{
+            position: 'absolute',
+            top: 70,
+            right: 20,
+            zIndex: 30,
+            backgroundColor: colors.surface,
+            borderWidth: 1.5,
+            borderColor: colors.line,
+            borderRadius: 10,
+            padding: 6,
+            minWidth: 160,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.15,
+            shadowRadius: 10,
+            elevation: 8,
+          }}
+        >
+          <TouchableOpacity
+            onPress={() => { setMenuOpen(false); handleLogout(); }}
+            style={{ padding: 11, borderRadius: 6 }}
+          >
+            <Text style={{ fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 14, color: colors.ink2 }}>
+              Sair
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* ── Tab switcher ─────────────────────────────────────────────── */}
       <View style={{ paddingHorizontal: 20, paddingTop: 12, paddingBottom: 10 }}>
@@ -303,6 +355,8 @@ export default function CoachHomeScreen() {
         activeCount={activeCount}
         onInvite={handleInvite}
         onClose={() => setInviteOpen(false)}
+        loading={createInvite.isPending}
+        error={createInvite.error ? (createInvite.error as any)?.response?.data?.message ?? 'Erro ao enviar convite.' : null}
       />
     </SafeAreaView>
   );

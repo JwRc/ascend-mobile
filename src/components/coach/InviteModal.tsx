@@ -14,6 +14,8 @@ type Props = {
   visible: boolean;
   programs: CoachProgram[];
   activeCount: number;
+  loading?: boolean;
+  error?: string | null;
   onInvite: (payload: {
     name: string;
     email: string;
@@ -24,7 +26,7 @@ type Props = {
   onClose: () => void;
 };
 
-export function InviteModal({ visible, programs, activeCount, onInvite, onClose }: Props) {
+export function InviteModal({ visible, programs, activeCount, loading, error, onInvite, onClose }: Props) {
   const { colors, radius } = useTheme();
   const [name, setName] = React.useState('');
   const [contact, setContact] = React.useState('');
@@ -42,15 +44,17 @@ export function InviteModal({ visible, programs, activeCount, onInvite, onClose 
     setProgOpen(false);
   }
 
+  React.useEffect(() => {
+    if (!visible) reset();
+  }, [visible]);
+
   function handleClose() {
-    reset();
     onClose();
   }
 
   function handleSend() {
-    if (!name.trim() || !contact.trim()) return;
+    if (!name.trim() || !contact.trim() || loading) return;
     onInvite({ name: name.trim(), email: contact.trim(), contactType, units, programId });
-    reset();
   }
 
   const billing = billingFor(activeCount + 1);
@@ -237,10 +241,18 @@ export function InviteModal({ visible, programs, activeCount, onInvite, onClose 
             )}
       </View>
 
+      {/* error */}
+      {!!error && (
+        <Text style={{ fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 13, color: '#e5484d' }}>
+          {error}
+        </Text>
+      )}
+
       {/* actions */}
       <View style={{ flexDirection: 'row', gap: 10 }}>
           <TouchableOpacity
             onPress={handleClose}
+            disabled={loading}
             style={{
               flex: 1,
               paddingVertical: 15,
@@ -248,6 +260,7 @@ export function InviteModal({ visible, programs, activeCount, onInvite, onClose 
               borderWidth: 1.5,
               borderColor: colors.line,
               alignItems: 'center',
+              opacity: loading ? 0.5 : 1,
             }}
           >
             <Text style={{ fontFamily: 'HankenGrotesk_700Bold', fontSize: 15, color: colors.ink2 }}>
@@ -256,17 +269,17 @@ export function InviteModal({ visible, programs, activeCount, onInvite, onClose 
           </TouchableOpacity>
           <TouchableOpacity
             onPress={handleSend}
-            disabled={!valid}
+            disabled={!valid || !!loading}
             style={{
               flex: 2,
               paddingVertical: 15,
               borderRadius: radius.cardSm,
-              backgroundColor: valid ? colors.accent : colors.line2,
+              backgroundColor: valid && !loading ? colors.accent : colors.line2,
               alignItems: 'center',
             }}
           >
             <Text style={{ fontFamily: 'HankenGrotesk_700Bold', fontSize: 15, color: '#fff' }}>
-              Enviar convite
+              {loading ? 'Enviando...' : 'Enviar convite'}
             </Text>
           </TouchableOpacity>
       </View>

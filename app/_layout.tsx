@@ -2,7 +2,7 @@
 import '../src/global.css';
 import React from 'react';
 import { Animated, View } from 'react-native';
-import { Stack } from 'expo-router';
+import { Stack, router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useFonts } from 'expo-font';
@@ -29,6 +29,7 @@ import {
   isRememberMeValid,
   persistRememberMeToken,
 } from '@/lib/auth';
+import { StripeProvider } from '@stripe/stripe-react-native';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -112,7 +113,7 @@ const queryClient = new QueryClient({
 export default function RootLayout() {
   const { isDark, direction, accent } = useUIStore();
   const theme = buildTheme(isDark, direction, accent);
-  const { setSession, markHydrated } = useAuthStore();
+  const { setSession, markHydrated, setSubscriptionExpired } = useAuthStore();
   const [sessionChecked, setSessionChecked] = React.useState(false);
 
   const [fontsLoaded] = useFonts({
@@ -127,18 +128,42 @@ export default function RootLayout() {
 
   React.useEffect(() => {
     async function restoreSession() {
+      console.log('RESTORE SESSION - início');
+      // serverResponded = true quando o servidor devolveu qualquer resposta HTTP
+      // (incluindo "sem sessão"). Só usamos offline quando não há resposta de rede.
+      let serverResponded = false;
       try {
         const { data } = await authClient.getSession();
+        console.log('RESTORE SESSION - resposta', data);
+
+        serverResponded = true;
         if (data?.session && data?.user) {
+          console.log('RESTORE SESSION - setSession');
           const u = data.user as { id: string; email: string; role?: string };
           const role: UserRole = u.role === 'COACH' ? 'COACH' : 'STUDENT';
           setSession(u.id, u.email, role);
           fetchAndStoreRememberMeToken();
           return;
         }
-      } catch {
-        // sem internet ou sessão expirada — tenta fase offline
+        // Servidor respondeu mas não há sessão válida → não usar modo offline
+        console.log('RESTORE SESSION - sem sessão');
+        return;
+      } catch (err: any) {
+         console.log('RESTORE SESSION - erro', err);
+        const status = err?.status ?? err?.response?.status ?? err?.statusCode;
+        if (status === 402) {
+          
+          setSubscriptionExpired(true);
+          router.replace('/(billing)');
+          return;
+        }
+        // status presente = servidor respondeu com erro HTTP → não usar offline
+        if (status) serverResponded = true;
+        // sem status = erro de rede → servidor inacessível → tenta offline abaixo
       }
+
+      // Só chega aqui quando o servidor estava inacessível (sem internet)
+      if (serverResponded) return;
 
       try {
         const token = await getRememberMeToken();
@@ -173,19 +198,24 @@ export default function RootLayout() {
   if (!fontsLoaded || !sessionChecked) return <BootScreen accent={accent} />;
 
   return (
-    <SafeAreaProvider>
-      <QueryClientProvider client={queryClient}>
-        <ThemeContext.Provider value={theme}>
-          <StatusBar style={isDark ? 'light' : 'dark'} />
-          <Stack screenOptions={{ headerShown: false }}>
-            <Stack.Screen name="index" />
-            <Stack.Screen name="(auth)" />
-            <Stack.Screen name="(onboarding)" />
-            <Stack.Screen name="(app)" />
-            <Stack.Screen name="(coach)" />
-          </Stack>
-        </ThemeContext.Provider>
-      </QueryClientProvider>
-    </SafeAreaProvider>
+    <StripeProvider publishableKey={process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? ''}>
+      <SafeAreaProvider>
+        <QueryClientProvider client={queryClient}>
+          <ThemeContext.Provider value={theme}>
+            <StatusBar style={isDark ? 'light' : 'dark'} />
+            <Stack screenOptions={{ headerShown: false }}>
+              <Stack.Screen name="index" />
+              <Stack.Screen name="invite" />
+              <Stack.Screen name="(auth)" />
+              <Stack.Screen name="(onboarding)" />
+              <Stack.Screen name="(signup)" />
+              <Stack.Screen name="(app)" />
+              <Stack.Screen name="(coach)" />
+              <Stack.Screen name="(billing)" />
+            </Stack>
+          </ThemeContext.Provider>
+        </QueryClientProvider>
+      </SafeAreaProvider>
+    </StripeProvider>
   );
 }

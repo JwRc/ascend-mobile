@@ -1,8 +1,8 @@
-import { create } from 'zustand';
-import { clearToken, clearRememberMeToken } from '@/lib/auth';
-import { useOfflineStore } from './offline.store';
+import { create } from "zustand";
+import { clearToken, clearRememberMeToken } from "@/lib/auth";
+import { useOfflineStore } from "./offline.store";
 
-export type UserRole = 'STUDENT' | 'COACH';
+export type UserRole = "STUDENT" | "COACH";
 
 type AuthState = {
   isAuthenticated: boolean;
@@ -10,17 +10,23 @@ type AuthState = {
   userId: string | null;
   email: string | null;
   role: UserRole | null;
-  plan: 'BASE' | 'CUSTOM' | null;
+  plan: "BASE" | "CUSTOM" | null;
   offlineGraceUntil: number | null;
   isOfflineSession: boolean;
+  subscriptionExpired: boolean;
   setSession: (
     userId: string,
     email: string,
     role: UserRole,
-    opts?: { plan?: 'BASE' | 'CUSTOM'; offlineGraceUntil?: number; isOfflineSession?: boolean },
+    opts?: {
+      plan?: "BASE" | "CUSTOM";
+      offlineGraceUntil?: number;
+      isOfflineSession?: boolean;
+    },
   ) => void;
   clearSession: () => Promise<void>;
   markHydrated: () => void;
+  setSubscriptionExpired: (val: boolean) => void;
 };
 
 export const useAuthStore = create<AuthState>((set) => ({
@@ -32,6 +38,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   plan: null,
   offlineGraceUntil: null,
   isOfflineSession: false,
+  subscriptionExpired: false,
 
   setSession: (userId, email, role, opts) =>
     set({
@@ -45,6 +52,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     }),
 
   clearSession: async () => {
+    console.log("Clearing session...");
     await clearToken();
     await clearRememberMeToken();
     useOfflineStore.getState().clearAll();
@@ -56,8 +64,11 @@ export const useAuthStore = create<AuthState>((set) => ({
       plan: null,
       offlineGraceUntil: null,
       isOfflineSession: false,
+      subscriptionExpired: false,
     });
   },
 
   markHydrated: () => set({ hydrated: true }),
+
+  setSubscriptionExpired: (val) => set({ subscriptionExpired: val }),
 }));

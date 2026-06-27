@@ -119,6 +119,7 @@ export type StudentSummary = {
   flags: StudentFlag[];
   onTrack: boolean;
   severity: number;
+  isMe?: boolean;
 };
 
 export type Invite = {

@@ -3,6 +3,7 @@ import * as SecureStore from 'expo-secure-store';
 
 export const authClient = createAuthClient({
   baseURL: process.env.EXPO_PUBLIC_BETTER_AUTH_URL ?? '',
+  basePath: '/auth',
   fetchOptions: {
     customFetchImpl: async (url, options) => {
       const token = await SecureStore.getItemAsync('auth_token');

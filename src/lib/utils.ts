@@ -73,3 +73,12 @@ export function epley1RM(weight: number, reps: number): number {
   if (reps === 1) return weight;
   return round1(weight * (1 + reps / 30));
 }
+
+export function getApiError(e: unknown, fallback = 'Erro inesperado. Tente novamente.'): string {
+  const msg = (e as any)?.response?.data?.message;
+  if (typeof msg === 'string') return msg;
+  if (typeof (msg as any)?.message === 'string') return (msg as any).message;
+  const err = (e as any)?.message;
+  if (typeof err === 'string') return err;
+  return fallback;
+}

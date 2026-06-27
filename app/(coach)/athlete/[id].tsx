@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useTheme } from '@/theme';
 import { AthleteDetail } from '@/components/coach/AthleteDetail';
+import { StudentOwnSection } from '@/components/coach/StudentOwnSection';
 import { useStudentById, useUpdateStudentGoal, useAssignStudentProgram } from '@/api/hooks/useStudents';
 import { usePrograms } from '@/api/hooks/usePrograms';
 import { useInvites, useRevokeInvite, useResendInvite } from '@/api/hooks/useInvites';
@@ -128,7 +129,7 @@ export default function AthleteDetailScreen() {
         }}
       >
         <TouchableOpacity
-          onPress={() => router.back()}
+          onPress={() => router.canGoBack() ? router.back() : router.replace('/(coach)')}
           style={{
             width: 36,
             height: 36,
@@ -164,6 +165,7 @@ export default function AthleteDetailScreen() {
         onUpdateNotes={() => {}} // notes not supported by API yet
         onResendInvite={handleResendInvite}
         onCancelInvite={handleCancelInvite}
+        extraContent={studentRaw?.isMe ? <StudentOwnSection units={athlete.units} /> : undefined}
       />
     </SafeAreaView>
   );

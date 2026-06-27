@@ -290,6 +290,7 @@ type Props = {
   onUpdateNotes: (athleteId: string, notes: string) => void;
   onResendInvite: (athleteId: string) => void;
   onCancelInvite: (athleteId: string) => void;
+  extraContent?: React.ReactNode;
 };
 
 export function AthleteDetail({
@@ -300,6 +301,7 @@ export function AthleteDetail({
   onUpdateNotes,
   onResendInvite,
   onCancelInvite,
+  extraContent,
 }: Props) {
   const { colors, radius } = useTheme();
   const [notes, setNotes] = React.useState(athlete.notes);
@@ -379,9 +381,9 @@ export function AthleteDetail({
         </View>
 
         {/* flags */}
-        {athlete.flags.length > 0 && (
+        {(athlete.flags?.length ?? 0) > 0 && (
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-            {athlete.flags.map((f, i) => (
+            {athlete.flags!.map((f, i) => (
               <FlagBadge key={i} flag={f} />
             ))}
           </View>
@@ -545,6 +547,8 @@ export function AthleteDetail({
             </View>
           </>
         )}
+
+        {extraContent}
       </View>
     </ScrollView>
   );

@@ -6,9 +6,10 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   StyleSheet,
+  BackHandler,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTheme } from '@/theme';
 import { useAuthStore } from '@/store/auth.store';
@@ -18,7 +19,7 @@ import { useBodyRecords, useLogWeight, useDeleteBodyRecord } from '@/api/hooks/u
 import { useSetGoal } from '@/api/hooks/useGoals';
 import { useWorkoutTemplates, useCreateWorkoutTemplate } from '@/api/hooks/useWorkoutTemplates';
 import { useWorkouts, useLogWorkout } from '@/api/hooks/useWorkouts';
-import { authClient, clearToken } from '@/lib/auth';
+import { authClient } from '@/lib/auth';
 import type { WorkoutInput, Workout } from '@/types/api';
 import { Logo } from '@/components/shared/Logo';
 import { Avatar } from '@/components/shared/Avatar';
@@ -96,6 +97,16 @@ export default function DashboardScreen() {
   const { colors, direction } = useTheme();
   const { clearSession } = useAuthStore();
   const queryClient = useQueryClient();
+
+  useFocusEffect(
+    React.useCallback(() => {
+      const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+        BackHandler.exitApp();
+        return true;
+      });
+      return () => sub.remove();
+    }, [])
+  );
 
   // API data
   const { data: studentProfile, isLoading: profileLoading } = useStudentProfile();
@@ -178,10 +189,9 @@ export default function DashboardScreen() {
     try {
       await authClient.signOut();
     } catch { /* ignore */ }
-    await clearToken();
-    clearSession();
+    await clearSession();
     queryClient.clear();
-    router.replace('/');
+    router.replace('/(auth)/login');
   }
 
   function startTemplate(t: import('@/store/strength.store').Template) {
