@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { clearToken, clearRememberMeToken } from "@/lib/auth";
+import { deregisterPushToken } from "@/lib/notifications";
 import { useOfflineStore } from "./offline.store";
 
 export type UserRole = "STUDENT" | "COACH";
@@ -10,6 +11,7 @@ type AuthState = {
   userId: string | null;
   email: string | null;
   role: UserRole | null;
+  tenantId: string | null;
   plan: "BASE" | "CUSTOM" | null;
   offlineGraceUntil: number | null;
   isOfflineSession: boolean;
@@ -19,6 +21,7 @@ type AuthState = {
     email: string,
     role: UserRole,
     opts?: {
+      tenantId?: string | null;
       plan?: "BASE" | "CUSTOM";
       offlineGraceUntil?: number;
       isOfflineSession?: boolean;
@@ -35,6 +38,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   userId: null,
   email: null,
   role: null,
+  tenantId: null,
   plan: null,
   offlineGraceUntil: null,
   isOfflineSession: false,
@@ -46,6 +50,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       userId,
       email,
       role,
+      tenantId: opts?.tenantId ?? null,
       plan: opts?.plan ?? null,
       offlineGraceUntil: opts?.offlineGraceUntil ?? null,
       isOfflineSession: opts?.isOfflineSession ?? false,
@@ -53,6 +58,7 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   clearSession: async () => {
     console.log("Clearing session...");
+    await deregisterPushToken();
     await clearToken();
     await clearRememberMeToken();
     useOfflineStore.getState().clearAll();
@@ -61,6 +67,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       userId: null,
       email: null,
       role: null,
+      tenantId: null,
       plan: null,
       offlineGraceUntil: null,
       isOfflineSession: false,

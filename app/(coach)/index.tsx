@@ -12,6 +12,7 @@ import { CoachPrograms } from '@/components/coach/CoachPrograms';
 import { InviteModal } from '@/components/coach/InviteModal';
 import { useAuthStore } from '@/store/auth.store';
 import { authClient } from '@/lib/auth';
+import { resetAnalytics } from '@/lib/analytics';
 import {
   COACH_ACCOUNT,
   billingFor,
@@ -24,6 +25,7 @@ import { useCoachDashboard } from '@/api/hooks/useDashboard';
 import { useStudents, useUpdateStudentGoal, useAssignStudentProgram } from '@/api/hooks/useStudents';
 import { usePrograms, useCreateProgram, useUpdateProgram, useDeleteProgram } from '@/api/hooks/usePrograms';
 import { useCreateInvite } from '@/api/hooks/useInvites';
+import { useNotifications } from '@/api/hooks/useNotifications';
 import type { StudentSummary, Program, CoachDashboard } from '@/types/api';
 
 type Tab = 'overview' | 'roster' | 'programs';
@@ -115,6 +117,8 @@ export default function CoachHomeScreen() {
   const { data: dashboard, isLoading: dashLoading } = useCoachDashboard();
   const { data: studentsRaw = [], isLoading: studentsLoading } = useStudents();
   const { data: programsRaw = [], isLoading: programsLoading } = usePrograms();
+  const { data: notifications = [] } = useNotifications();
+  const unreadCount = notifications.length;
 
   // API mutations
   const createInvite = useCreateInvite();
@@ -144,6 +148,7 @@ export default function CoachHomeScreen() {
 
   async function handleLogout() {
     try { await authClient.signOut(); } catch { /* ignore */ }
+    resetAnalytics();
     await clearSession();
     queryClient.clear();
     router.replace('/(auth)/login');
@@ -246,6 +251,41 @@ export default function CoachHomeScreen() {
           <Text style={{ fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 12.5, color: colors.ink3 }}>
             R$ {billingFor(activeCount).total}/mês
           </Text>
+          <TouchableOpacity
+            onPress={() => router.push('/(app)/notifications' as any)}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <View style={{ position: 'relative' }}>
+              <Text style={{ fontSize: 20 }}>🔔</Text>
+              {unreadCount > 0 && (
+                <View
+                  style={{
+                    position: 'absolute',
+                    top: -4,
+                    right: -6,
+                    backgroundColor: '#e5484d',
+                    borderRadius: 8,
+                    minWidth: 16,
+                    height: 16,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    paddingHorizontal: 3,
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontFamily: 'Archivo_800ExtraBold',
+                      fontSize: 9,
+                      color: '#fff',
+                      lineHeight: 14,
+                    }}
+                  >
+                    {unreadCount > 9 ? '9+' : unreadCount}
+                  </Text>
+                </View>
+              )}
+            </View>
+          </TouchableOpacity>
           <TouchableOpacity onPress={() => setMenuOpen(!menuOpen)}>
             <View
               style={{

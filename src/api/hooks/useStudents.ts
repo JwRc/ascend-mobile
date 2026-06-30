@@ -49,6 +49,18 @@ export function useAssignStudentProgram() {
   });
 }
 
+export function useUpdateStudentNotes() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ athleteId, notes }: { athleteId: string; notes: string }) => {
+      await api.patch(`/students/${athleteId}/notes`, { notes });
+    },
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ['students', vars.athleteId] });
+    },
+  });
+}
+
 export function useRemoveStudent() {
   const qc = useQueryClient();
   return useMutation({

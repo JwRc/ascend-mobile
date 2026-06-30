@@ -10,6 +10,7 @@ import { Btn } from '@/components/shared/Btn';
 import { Field, StyledInput } from '@/components/shared/Field';
 import { useAuthStore, type UserRole } from '@/store/auth.store';
 import { authClient, persistToken, persistRememberMeToken } from '@/lib/auth';
+import { identify } from '@/lib/analytics';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
 
@@ -74,7 +75,8 @@ export default function LoginScreen() {
       if (token) await persistToken(token);
       const user = (data as any).user;
       const role: UserRole = user?.role === 'COACH' ? 'COACH' : 'STUDENT';
-      setSession(user?.id ?? '', user?.email ?? email, role);
+      setSession(user?.id ?? '', user?.email ?? email, role, { tenantId: user?.tenantId ?? null });
+      identify(user?.id ?? '', role.toLowerCase());
       await fetchRememberMeToken();
       router.replace(role === 'COACH' ? '/(coach)' : '/(app)');
     } catch (e: any) {
@@ -96,6 +98,7 @@ export default function LoginScreen() {
     const user = (data as any)?.user;
     const role: UserRole = user?.role === 'COACH' ? 'COACH' : 'STUDENT';
     setSession(user?.id ?? '', user?.email ?? '', role);
+    identify(user?.id ?? '', role.toLowerCase());
     await fetchRememberMeToken();
     router.replace(role === 'COACH' ? '/(coach)' : '/(app)');
   }
@@ -313,6 +316,12 @@ export default function LoginScreen() {
             <Btn kind="primary" full onPress={handleSubmit} loading={loading}>
               Entrar
             </Btn>
+
+            <TouchableOpacity onPress={() => router.push('/(auth)/forgot-password')} style={{ alignItems: 'center', paddingVertical: 4 }}>
+              <Text style={{ fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 13, color: colors.ink3, textDecorationLine: 'underline', textUnderlineOffset: 3 }}>
+                Esqueci minha senha
+              </Text>
+            </TouchableOpacity>
           </View>
         </View>
       </ScrollView>

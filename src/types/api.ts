@@ -120,6 +120,7 @@ export type StudentSummary = {
   onTrack: boolean;
   severity: number;
   isMe?: boolean;
+  notes?: string;
 };
 
 export type Invite = {

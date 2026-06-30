@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../client';
 import type { BodyRecord } from '../../types/api';
+import { capture } from '../../lib/analytics';
 
 export function useBodyRecords() {
   return useQuery({
@@ -23,6 +24,7 @@ export function useLogWeight() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['body-records'] });
+      capture('weight_logged');
     },
   });
 }

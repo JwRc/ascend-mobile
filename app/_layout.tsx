@@ -30,6 +30,9 @@ import {
   persistRememberMeToken,
 } from '@/lib/auth';
 import { StripeProvider } from '@stripe/stripe-react-native';
+import { PostHogProvider } from 'posthog-react-native';
+import { posthog, identify } from '@/lib/analytics';
+import { registerPushToken } from '@/lib/notifications';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -139,9 +142,11 @@ export default function RootLayout() {
         serverResponded = true;
         if (data?.session && data?.user) {
           console.log('RESTORE SESSION - setSession');
-          const u = data.user as { id: string; email: string; role?: string };
+          const u = data.user as { id: string; email: string; role?: string; tenantId?: string | null };
           const role: UserRole = u.role === 'COACH' ? 'COACH' : 'STUDENT';
-          setSession(u.id, u.email, role);
+          setSession(u.id, u.email, role, { tenantId: u.tenantId ?? null });
+          identify(u.id, role.toLowerCase());
+          void registerPushToken();
           fetchAndStoreRememberMeToken();
           return;
         }
@@ -176,6 +181,8 @@ export default function RootLayout() {
               offlineGraceUntil: claims.offlineGraceUntil,
               isOfflineSession: true,
             });
+            identify(claims.userId, role.toLowerCase());
+            void registerPushToken();
             return;
           }
         }
@@ -198,24 +205,26 @@ export default function RootLayout() {
   if (!fontsLoaded || !sessionChecked) return <BootScreen accent={accent} />;
 
   return (
-    <StripeProvider publishableKey={process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? ''}>
-      <SafeAreaProvider>
-        <QueryClientProvider client={queryClient}>
-          <ThemeContext.Provider value={theme}>
-            <StatusBar style={isDark ? 'light' : 'dark'} />
-            <Stack screenOptions={{ headerShown: false }}>
-              <Stack.Screen name="index" />
-              <Stack.Screen name="invite" />
-              <Stack.Screen name="(auth)" />
-              <Stack.Screen name="(onboarding)" />
-              <Stack.Screen name="(signup)" />
-              <Stack.Screen name="(app)" />
-              <Stack.Screen name="(coach)" />
-              <Stack.Screen name="(billing)" />
-            </Stack>
-          </ThemeContext.Provider>
-        </QueryClientProvider>
-      </SafeAreaProvider>
-    </StripeProvider>
+    <PostHogProvider client={posthog ?? undefined}>
+      <StripeProvider publishableKey={process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? ''}>
+        <SafeAreaProvider>
+          <QueryClientProvider client={queryClient}>
+            <ThemeContext.Provider value={theme}>
+              <StatusBar style={isDark ? 'light' : 'dark'} />
+              <Stack screenOptions={{ headerShown: false }}>
+                <Stack.Screen name="index" />
+                <Stack.Screen name="invite" />
+                <Stack.Screen name="(auth)" />
+                <Stack.Screen name="(onboarding)" />
+                <Stack.Screen name="(signup)" />
+                <Stack.Screen name="(app)" />
+                <Stack.Screen name="(coach)" />
+                <Stack.Screen name="(billing)" />
+              </Stack>
+            </ThemeContext.Provider>
+          </QueryClientProvider>
+        </SafeAreaProvider>
+      </StripeProvider>
+    </PostHogProvider>
   );
 }

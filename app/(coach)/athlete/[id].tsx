@@ -5,7 +5,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useTheme } from '@/theme';
 import { AthleteDetail } from '@/components/coach/AthleteDetail';
 import { StudentOwnSection } from '@/components/coach/StudentOwnSection';
-import { useStudentById, useUpdateStudentGoal, useAssignStudentProgram } from '@/api/hooks/useStudents';
+import { useStudentById, useUpdateStudentGoal, useAssignStudentProgram, useUpdateStudentNotes } from '@/api/hooks/useStudents';
 import { usePrograms } from '@/api/hooks/usePrograms';
 import { useInvites, useRevokeInvite, useResendInvite } from '@/api/hooks/useInvites';
 import type { CoachAthlete, CoachProgram, Flag } from '@/store/coach.store';
@@ -32,7 +32,7 @@ function studentToAthlete(s: StudentSummary): CoachAthlete {
     flags: s.flags as Flag[],
     severity: s.severity,
     onTrack: s.onTrack,
-    notes: '',
+    notes: s.notes ?? '',
     goalSetBy: 'athlete',
   };
 }
@@ -58,6 +58,7 @@ export default function AthleteDetailScreen() {
 
   const updateStudentGoal = useUpdateStudentGoal();
   const assignStudentProgram = useAssignStudentProgram();
+  const updateStudentNotes = useUpdateStudentNotes();
   const revokeInvite = useRevokeInvite();
   const resendInvite = useResendInvite();
 
@@ -162,7 +163,7 @@ export default function AthleteDetailScreen() {
         programs={programs}
         onAssignProgram={handleAssignProgram}
         onUpdateGoal={handleUpdateGoal}
-        onUpdateNotes={() => {}} // notes not supported by API yet
+        onUpdateNotes={(athleteId, notes) => updateStudentNotes.mutate({ athleteId, notes })}
         onResendInvite={handleResendInvite}
         onCancelInvite={handleCancelInvite}
         extraContent={studentRaw?.isMe ? <StudentOwnSection units={athlete.units} /> : undefined}

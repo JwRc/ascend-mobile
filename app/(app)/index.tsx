@@ -16,10 +16,12 @@ import { useAuthStore } from '@/store/auth.store';
 import { useStrengthStore } from '@/store/strength.store';
 import { useStudentProfile } from '@/api/hooks/useStudentProfile';
 import { useBodyRecords, useLogWeight, useDeleteBodyRecord } from '@/api/hooks/useBodyRecords';
+import { useNotifications } from '@/api/hooks/useNotifications';
 import { useSetGoal } from '@/api/hooks/useGoals';
 import { useWorkoutTemplates, useCreateWorkoutTemplate } from '@/api/hooks/useWorkoutTemplates';
 import { useWorkouts, useLogWorkout } from '@/api/hooks/useWorkouts';
 import { authClient } from '@/lib/auth';
+import { resetAnalytics, capture } from '@/lib/analytics';
 import type { WorkoutInput, Workout } from '@/types/api';
 import { Logo } from '@/components/shared/Logo';
 import { Avatar } from '@/components/shared/Avatar';
@@ -111,6 +113,8 @@ export default function DashboardScreen() {
   // API data
   const { data: studentProfile, isLoading: profileLoading } = useStudentProfile();
   const { data: bodyRecords, isLoading: recordsLoading } = useBodyRecords();
+  const { data: notifications = [] } = useNotifications();
+  const unreadCount = notifications.length;
   const logWeight = useLogWeight();
   const deleteRecord = useDeleteBodyRecord();
   const setGoalMutation = useSetGoal();
@@ -189,6 +193,7 @@ export default function DashboardScreen() {
     try {
       await authClient.signOut();
     } catch { /* ignore */ }
+    resetAnalytics();
     await clearSession();
     queryClient.clear();
     router.replace('/(auth)/login');
@@ -260,7 +265,11 @@ export default function DashboardScreen() {
 
     try {
       const workout = await logWorkout.mutateAsync(input);
+      capture('workout_logged', { exerciseCount: input.exercises.length });
       if (workout.prs && workout.prs.length > 0) {
+        for (const pr of workout.prs) {
+          capture('pr_achieved', { exerciseName: pr.exerciseName });
+        }
         const mappedPRs = workout.prs.map((pr) => ({
           exercise: pr.exerciseName,
           e: round1(pr.estimated1RM),
@@ -306,6 +315,41 @@ export default function DashboardScreen() {
           <Text style={{ fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 14, color: colors.ink2 }}>
             Olá, {studentProfile?.name ?? ''}
           </Text>
+          <TouchableOpacity
+            onPress={() => router.push('/(app)/notifications')}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <View style={{ position: 'relative' }}>
+              <Text style={{ fontSize: 22 }}>🔔</Text>
+              {unreadCount > 0 && (
+                <View
+                  style={{
+                    position: 'absolute',
+                    top: -4,
+                    right: -6,
+                    backgroundColor: '#e5484d',
+                    borderRadius: 8,
+                    minWidth: 16,
+                    height: 16,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    paddingHorizontal: 3,
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontFamily: 'Archivo_800ExtraBold',
+                      fontSize: 9,
+                      color: '#fff',
+                      lineHeight: 14,
+                    }}
+                  >
+                    {unreadCount > 9 ? '9+' : unreadCount}
+                  </Text>
+                </View>
+              )}
+            </View>
+          </TouchableOpacity>
           <TouchableOpacity onPress={() => setMenuOpen(!menuOpen)}>
             <Avatar name={studentProfile?.name ?? ''} size={40} />
           </TouchableOpacity>

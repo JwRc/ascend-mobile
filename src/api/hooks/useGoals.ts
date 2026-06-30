@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../client';
 import type { Goal } from '../../types/api';
+import { capture } from '../../lib/analytics';
 
 export function useActiveGoal() {
   return useQuery({
@@ -19,9 +20,10 @@ export function useSetGoal() {
       const res = await api.post<Goal>('/goals', { targetWeight, goalType });
       return res.data;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ['goals', 'active'] });
       qc.invalidateQueries({ queryKey: ['student', 'profile'] });
+      capture('goal_set', { goalType: data.goalType });
     },
   });
 }

@@ -9,6 +9,7 @@ import { useTheme } from '@/theme';
 import { AppModal } from '@/components/shared/AppModal';
 import { SegmentedControl } from '@/components/shared/SegmentedControl';
 import { COACH_ACCOUNT, billingFor, type CoachProgram } from '@/store/coach.store';
+import { capture } from '@/lib/analytics';
 
 type Props = {
   visible: boolean;
@@ -55,6 +56,7 @@ export function InviteModal({ visible, programs, activeCount, loading, error, on
   function handleSend() {
     if (!name.trim() || !contact.trim() || loading) return;
     onInvite({ name: name.trim(), email: contact.trim(), contactType, units, programId });
+    capture('invite_sent');
   }
 
   const billing = billingFor(activeCount + 1);
