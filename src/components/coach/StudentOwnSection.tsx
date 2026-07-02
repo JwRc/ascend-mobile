@@ -9,13 +9,14 @@ import { WorkoutEntry } from '@/components/strength/WorkoutEntry';
 import { ActiveSession } from '@/components/strength/ActiveSession';
 import { StrengthDashboard } from '@/components/strength/StrengthDashboard';
 import { PrCelebration } from '@/components/strength/PrCelebration';
+import { TemplateEditorModal } from '@/components/strength/TemplateEditorModal';
 import { useBodyRecords, useLogWeight, useDeleteBodyRecord } from '@/api/hooks/useBodyRecords';
 import { useStudentProfile } from '@/api/hooks/useStudentProfile';
 import { useWorkoutTemplates, useCreateWorkoutTemplate } from '@/api/hooks/useWorkoutTemplates';
 import { useWorkouts, useLogWorkout } from '@/api/hooks/useWorkouts';
 import { useStrengthStore } from '@/store/strength.store';
 import {
-  round1, movingAverage, weighInStreak, last7Days, convert, fmtDateLong, todayISO,
+  round1, movingAverage, weighInStreak, last7Days, convert, fmtDateLong, todayISO, classifySets,
 } from '@/lib/utils';
 import type { WorkoutInput, Workout } from '@/types/api';
 import type { Session, SetType, WorkSet, Template } from '@/store/strength.store';
@@ -75,6 +76,7 @@ export function StudentOwnSection({ units }: Props) {
   const [showLogModal, setShowLogModal] = React.useState(false);
   const [pendingPRs, setPendingPRs] = React.useState<{ exercise: string; e: number; prevBest: number; weight: number | null; reps: number | null }[]>([]);
   const [showPRs, setShowPRs] = React.useState(false);
+  const [editTplId, setEditTplId] = React.useState<string | null>(null);
 
   // weight data
   const sortedRecords = [...bodyRecords].sort((a, b) => a.recordedAt.localeCompare(b.recordedAt));
@@ -112,6 +114,13 @@ export function StudentOwnSection({ units }: Props) {
   // strength data
   const sessions: Session[] = React.useMemo(() => workoutsRaw.map(workoutToSession), [workoutsRaw]);
   const templates: Template[] = templatesRaw;
+  const templateSuggestions = React.useMemo(() => {
+    const names = [
+      ...sessions.flatMap((s) => s.exercises.map((e) => e.name)),
+      ...templates.flatMap((t) => t.exercises),
+    ];
+    return [...new Set(names)].sort();
+  }, [sessions, templates]);
 
   // colors
   const trendGood = goalType === 'GAIN' ? weekDelta > 0 : weekDelta < 0;
@@ -169,12 +178,15 @@ export function StudentOwnSection({ units }: Props) {
         .filter((ex) => ex.sets.length > 0)
         .map((ex) => ({
           name: ex.name,
-          sets: ex.sets.map((s, i) => ({
-            setNumber: i + 1,
-            setType: (s.type?.toUpperCase() ?? 'WORK') as WorkoutInput['exercises'][0]['sets'][0]['setType'],
-            reps: s.reps,
-            weight: s.weight,
-          })),
+          sets: (() => {
+            const inferred = classifySets(ex.sets);
+            return ex.sets.map((s, i) => ({
+              setNumber: i + 1,
+              setType: ((s.type ?? inferred[i] ?? 'work').toUpperCase()) as WorkoutInput['exercises'][0]['sets'][0]['setType'],
+              reps: s.reps,
+              weight: s.weight,
+            }));
+          })(),
         })),
     };
     setActiveSession(null);
@@ -445,7 +457,7 @@ export function StudentOwnSection({ units }: Props) {
           onNewTemplate={() => {
             createTemplate.mutate({ name: `Treino ${templates.length + 1}`, exercises: [], targetMin: null });
           }}
-          onEditTemplate={() => {}}
+          onEditTemplate={(id) => setEditTplId(id)}
         />
       )}
 
@@ -480,6 +492,13 @@ export function StudentOwnSection({ units }: Props) {
           onClose={() => { setShowPRs(false); setPendingPRs([]); }}
         />
       )}
+
+      <TemplateEditorModal
+        visible={!!editTplId}
+        template={templates.find((t) => t.id === editTplId) ?? null}
+        onClose={() => setEditTplId(null)}
+        suggestions={templateSuggestions}
+      />
     </View>
   );
 }

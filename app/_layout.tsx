@@ -119,7 +119,7 @@ export default function RootLayout() {
   const { setSession, markHydrated, setSubscriptionExpired } = useAuthStore();
   const [sessionChecked, setSessionChecked] = React.useState(false);
 
-  const [fontsLoaded] = useFonts({
+  const [fontsLoaded, fontError] = useFonts({
     Archivo_800ExtraBold,
     Archivo_900Black,
     HankenGrotesk_400Regular,
@@ -128,6 +128,7 @@ export default function RootLayout() {
     HankenGrotesk_700Bold,
     HankenGrotesk_800ExtraBold,
   });
+  const fontsReady = fontsLoaded || !!fontError;
 
   React.useEffect(() => {
     async function restoreSession() {
@@ -136,7 +137,11 @@ export default function RootLayout() {
       // (incluindo "sem sessão"). Só usamos offline quando não há resposta de rede.
       let serverResponded = false;
       try {
-        const { data } = await authClient.getSession();
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 8000);
+        const { data } = await authClient.getSession({
+          fetchOptions: { signal: controller.signal },
+        }).finally(() => clearTimeout(timeout));
         console.log('RESTORE SESSION - resposta', data);
 
         serverResponded = true;
@@ -202,7 +207,7 @@ export default function RootLayout() {
     SplashScreen.hideAsync();
   }, []);
 
-  if (!fontsLoaded || !sessionChecked) return <BootScreen accent={accent} />;
+  if (!fontsReady || !sessionChecked) return <BootScreen accent={accent} />;
 
   return (
     <PostHogProvider client={posthog ?? undefined}>

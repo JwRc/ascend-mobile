@@ -8,7 +8,7 @@ export const STALE_DAYS = 5;
 
 export const COACH_ACCOUNT = {
   coachName: 'Marcus',
-  email: 'marcus@ascend.coach',
+  email: 'marcus@ascentio.coach',
   basePrice: 49,
   pricePerExtra: 9,
   includedSeats: 3,

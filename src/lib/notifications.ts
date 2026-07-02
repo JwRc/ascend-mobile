@@ -1,13 +1,20 @@
-import * as Notifications from 'expo-notifications';
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
+import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { api } from '@/api/client';
 
 const PUSH_TOKEN_KEY = 'pushToken';
 const PROJECT_ID = 'd1b4c973-825b-483f-8ea2-8d9a7849e3a6';
 
+// expo-notifications não suporta push remoto no Android Expo Go (removido no SDK 53)
+const isExpoGo = Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
+
 export async function registerPushToken(): Promise<void> {
+  if (isExpoGo && Platform.OS === 'android') return;
   try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const Notifications = require('expo-notifications') as typeof import('expo-notifications');
+
     if (Platform.OS === 'android') {
       await Notifications.setNotificationChannelAsync('default', {
         name: 'Notificações',

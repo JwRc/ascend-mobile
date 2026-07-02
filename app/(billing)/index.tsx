@@ -138,7 +138,7 @@ export default function BillingScreen() {
               Assinatura expirada
             </Text>
             <Text style={{ fontFamily: 'HankenGrotesk_400Regular', fontSize: 13.5, color: colors.ink2, lineHeight: 20 }}>
-              Adicione ou atualize seu método de pagamento para continuar usando o Ascend.
+              Adicione ou atualize seu método de pagamento para continuar usando o ASCENTIO.
             </Text>
           </View>
         )}
@@ -169,7 +169,7 @@ export default function BillingScreen() {
 
           {cardsLoading ? (
             <ActivityIndicator color={colors.accent} />
-          ) : cards && cards.length > 0 ? (
+          ) : Array.isArray(cards) && cards.length > 0 ? (
             <View style={{ gap: 10 }}>
               {cards.map((card) => (
                 <Card key={card.id}>

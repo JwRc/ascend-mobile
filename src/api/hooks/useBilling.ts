@@ -31,7 +31,7 @@ export function useCards() {
     queryKey: ['billing', 'cards'],
     queryFn: async () => {
       const res = await api.get<Card[]>('/billing/cards');
-      return res.data;
+      return Array.isArray(res.data) ? res.data : [];
     },
   });
 }
@@ -81,7 +81,7 @@ export function useGetPortalUrl() {
 export function useCancelSubscription() {
   return useMutation({
     mutationFn: async () => {
-      const res = await api.post<{ cancelAtPeriodEnd: boolean }>('/billing/cancel');
+      const res = await api.delete<{ cancelAtPeriodEnd: boolean }>('/billing/subscription');
       return res.data;
     },
   });

@@ -74,6 +74,26 @@ export function epley1RM(weight: number, reps: number): number {
   return round1(weight * (1 + reps / 30));
 }
 
+export function classifySets(sets: { weight: number; reps: number; type: string | null }[]): (string | null)[] {
+  if (!sets || !sets.length) return [];
+  const es = sets.map((s) => epley1RM(s.weight, s.reps));
+  const peak = Math.max(...es);
+  const anyManual = sets.some((s) => s.type);
+
+  if (sets.length === 2 && !anyManual) {
+    const hi = es[0] >= es[1] ? 0 : 1;
+    return sets.map((_, i) => (i === hi ? 'work' : null));
+  }
+
+  return sets.map((s, i) => {
+    if (s.type) return s.type;
+    const diff = peak > 0 ? (peak - es[i]) / peak : 0;
+    if (diff < 0.05) return 'work';
+    if (diff < 0.2) return 'feeder';
+    return 'warmup';
+  });
+}
+
 export function getApiError(e: unknown, fallback = 'Erro inesperado. Tente novamente.'): string {
   const msg = (e as any)?.response?.data?.message;
   if (typeof msg === 'string') return msg;

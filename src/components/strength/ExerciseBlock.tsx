@@ -4,7 +4,7 @@ import { useTheme } from '@/theme';
 import { Card } from '@/components/shared/Card';
 import { AddSetForm } from './AddSetForm';
 import { WorkSet, SetType } from '@/store/strength.store';
-import { round1, epley1RM } from '@/lib/utils';
+import { round1, epley1RM, classifySets } from '@/lib/utils';
 
 const SET_TYPE_LABEL: Record<string, string> = {
   warmup: 'AQ',
@@ -33,6 +33,7 @@ type Props = {
 export function ExerciseBlock({ name, sets, unit, defaultWeight, defaultReps, onAddSet, onRemoveSet }: Props) {
   const { colors, direction, radius } = useTheme();
   const [addingSet, setAddingSet] = React.useState(false);
+  const inferredTypes = classifySets(sets);
 
   return (
     <Card style={{ gap: 14 }}>
@@ -88,7 +89,7 @@ export function ExerciseBlock({ name, sets, unit, defaultWeight, defaultReps, on
           </View>
 
           {sets.map((s, i) => {
-            const typeKey = s.type || 'warmup';
+            const typeKey = s.type || inferredTypes[i] || 'warmup';
             const typeStyle = SET_TYPE_COLORS[typeKey] || SET_TYPE_COLORS.warmup;
             const estimated = round1(epley1RM(s.weight, s.reps));
 

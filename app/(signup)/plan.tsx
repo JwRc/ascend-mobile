@@ -125,7 +125,7 @@ export default function PlanScreen() {
             Escolha seu plano
           </Text>
           <Text style={{ fontFamily: 'Archivo_900Black', fontSize: 30, color: colors.ink, letterSpacing: -0.5 }}>
-            Como você vai usar o Ascend?
+            Como você vai usar o ASCENTIO?
           </Text>
           <Text style={{ fontFamily: 'HankenGrotesk_400Regular', fontSize: 15, color: colors.ink2, lineHeight: 22 }}>
             30 dias grátis · Cancele quando quiser

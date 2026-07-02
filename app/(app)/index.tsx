@@ -34,6 +34,7 @@ import { WorkoutEntry } from '@/components/strength/WorkoutEntry';
 import { ActiveSession } from '@/components/strength/ActiveSession';
 import { StrengthDashboard } from '@/components/strength/StrengthDashboard';
 import { PrCelebration } from '@/components/strength/PrCelebration';
+import { TemplateEditorModal } from '@/components/strength/TemplateEditorModal';
 import {
   round1,
   movingAverage,
@@ -129,6 +130,13 @@ export default function DashboardScreen() {
 
   const templates = templatesRaw;
   const sessions = React.useMemo(() => workoutsRaw.map(workoutToSession), [workoutsRaw]);
+  const templateSuggestions = React.useMemo(() => {
+    const names = [
+      ...sessions.flatMap((s) => s.exercises.map((e) => e.name)),
+      ...templates.flatMap((t) => t.exercises),
+    ];
+    return [...new Set(names)].sort();
+  }, [sessions, templates]);
 
   const [view, setView] = React.useState<TabView>('weight');
   const [weightSubView, setWeightSubView] = React.useState<'log' | 'charts'>('log');
@@ -140,6 +148,7 @@ export default function DashboardScreen() {
   const [editingGoal, setEditingGoal] = React.useState(false);
   const [menuOpen, setMenuOpen] = React.useState(false);
   const [nudgeDismissed, setNudgeDismissed] = React.useState(false);
+  const [editTplId, setEditTplId] = React.useState<string | null>(null);
 
   // Derived data
   const u = studentProfile?.units ?? 'kg';
@@ -670,7 +679,7 @@ export default function DashboardScreen() {
             onNewTemplate={() => {
               createTemplate.mutate({ name: `Treino ${templates.length + 1}`, exercises: [], targetMin: null });
             }}
-            onEditTemplate={() => {}}
+            onEditTemplate={(id) => setEditTplId(id)}
           />
         )}
 
@@ -713,6 +722,13 @@ export default function DashboardScreen() {
         prs={pendingPRs ?? []}
         unit={u}
         onClose={() => { setShowPRs(false); setPendingPRs([]); }}
+      />
+
+      <TemplateEditorModal
+        visible={!!editTplId}
+        template={templates.find((t) => t.id === editTplId) ?? null}
+        onClose={() => setEditTplId(null)}
+        suggestions={templateSuggestions}
       />
     </SafeAreaView>
   );

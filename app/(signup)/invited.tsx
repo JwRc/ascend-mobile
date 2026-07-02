@@ -428,7 +428,7 @@ export default function InvitedSignupScreen() {
               {key === 'password' && (
                 <View style={{ gap: 14 }}>
                   <Text style={{ fontFamily: 'HankenGrotesk_400Regular', fontSize: 15, color: colors.ink2, lineHeight: 22 }}>
-                    Crie uma senha para acessar sua conta no {coachName ? `grupo de ${coachName}` : 'Ascend'}.
+                    Crie uma senha para acessar sua conta no {coachName ? `grupo de ${coachName}` : 'ASCENTIO'}.
                   </Text>
                   <Field label="Senha">
                     <StyledInput

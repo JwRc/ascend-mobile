@@ -318,7 +318,7 @@ export default function LoginScreen() {
             </Btn>
 
             <TouchableOpacity onPress={() => router.push('/(auth)/forgot-password')} style={{ alignItems: 'center', paddingVertical: 4 }}>
-              <Text style={{ fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 13, color: colors.ink3, textDecorationLine: 'underline', textUnderlineOffset: 3 }}>
+              <Text style={{ fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 13, color: colors.ink3, textDecorationLine: 'underline' }}>
                 Esqueci minha senha
               </Text>
             </TouchableOpacity>
