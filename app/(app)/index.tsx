@@ -25,6 +25,7 @@ import { resetAnalytics, capture } from '@/lib/analytics';
 import type { WorkoutInput, Workout } from '@/types/api';
 import { Logo } from '@/components/shared/Logo';
 import { Avatar } from '@/components/shared/Avatar';
+import { BellIcon } from '@/components/shared/BellIcon';
 import { SegmentedControl } from '@/components/shared/SegmentedControl';
 import { Card } from '@/components/shared/Card';
 import { WeightChart } from '@/components/weight/WeightChart';
@@ -322,14 +323,14 @@ export default function DashboardScreen() {
         <Logo size={22} />
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
           <Text style={{ fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 14, color: colors.ink2 }}>
-            Olá, {studentProfile?.name ?? ''}
+            Olá, {studentProfile?.name?.trim().split(' ')[0] ?? ''}
           </Text>
           <TouchableOpacity
             onPress={() => router.push('/(app)/notifications')}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
             <View style={{ position: 'relative' }}>
-              <Text style={{ fontSize: 22 }}>🔔</Text>
+              <BellIcon size={20} color={colors.ink2} />
               {unreadCount > 0 && (
                 <View
                   style={{
@@ -364,6 +365,22 @@ export default function DashboardScreen() {
           </TouchableOpacity>
         </View>
       </View>
+
+      {studentProfile?.coachSubscriptionPastDue && (
+        <View
+          style={{
+            marginHorizontal: 20,
+            marginBottom: 12,
+            backgroundColor: '#e5484d18',
+            borderRadius: 10,
+            padding: 14,
+          }}
+        >
+          <Text style={{ fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 13.5, color: '#e5484d', lineHeight: 19 }}>
+            Seu coach está com o pagamento pendente. Fale com ele(a) para evitar interrupções no acompanhamento.
+          </Text>
+        </View>
+      )}
 
       {/* dropdown backdrop */}
       {menuOpen && (

@@ -43,6 +43,13 @@ api.interceptors.response.use(
     }
 
     if (err.response?.status === 402) {
+      if (err.response?.data?.code === "COACH_SUBSCRIPTION_EXPIRED") {
+        // Grace period do aluno vencido — sem sessão utilizável, manda para o login com a mensagem.
+        const message = err.response?.data?.message;
+        await useAuthStore.getState().clearSession();
+        router.replace({ pathname: "/(auth)/login", params: { notice: message } });
+        return Promise.reject(err);
+      }
       useAuthStore.getState().setSubscriptionExpired(true);
       router.replace("/(billing)");
       return Promise.reject(err);

@@ -11,6 +11,7 @@ export type StudentProfile = {
   startWeight: number | null;
   programId: string | null;
   programName: string | null;
+  coachSubscriptionPastDue?: boolean;
   goal: {
     id: string;
     targetWeight: number;

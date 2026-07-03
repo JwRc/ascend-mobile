@@ -1,11 +1,12 @@
 import React from 'react';
 import { View, Text, ScrollView, TouchableOpacity, Platform, KeyboardAvoidingView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import { useTheme } from '@/theme';
 import { Logo } from '@/components/shared/Logo';
+import { GoogleIcon } from '@/components/shared/GoogleIcon';
 import { Btn } from '@/components/shared/Btn';
 import { Field, StyledInput } from '@/components/shared/Field';
 import { useAuthStore, type UserRole } from '@/store/auth.store';
@@ -34,9 +35,10 @@ const APP_SCHEME = 'ascentio';
 export default function LoginScreen() {
   const { colors, radius, direction } = useTheme();
   const { setSession, setSubscriptionExpired } = useAuthStore();
+  const { notice } = useLocalSearchParams<{ notice?: string }>();
   const [email, setEmail] = React.useState('');
   const [password, setPassword] = React.useState('');
-  const [error, setError] = React.useState('');
+  const [error, setError] = React.useState(notice ?? '');
   const [loading, setLoading] = React.useState(false);
   const [socialLoading, setSocialLoading] = React.useState<'google' | 'apple' | null>(null);
 
@@ -63,6 +65,11 @@ export default function LoginScreen() {
       });
       if (authError || !data) {
         const status = (authError as any)?.status ?? (authError as any)?.statusCode;
+        const code = (authError as any)?.code;
+        if (status === 402 && code === 'COACH_SUBSCRIPTION_EXPIRED') {
+          setError(authError?.message ?? 'Acesso negado. Verifique o status da sua conta com seu coach.');
+          return;
+        }
         if (status === 402) {
           setSubscriptionExpired(true);
           router.replace('/(billing)');
@@ -81,6 +88,11 @@ export default function LoginScreen() {
       router.replace(role === 'COACH' ? '/(coach)' : '/(app)');
     } catch (e: any) {
       const status = e?.status ?? e?.response?.status ?? e?.statusCode;
+      const code = e?.code ?? e?.response?.data?.code;
+      if (status === 402 && code === 'COACH_SUBSCRIPTION_EXPIRED') {
+        setError(e?.message ?? 'Acesso negado. Verifique o status da sua conta com seu coach.');
+        return;
+      }
       if (status === 402) {
         setSubscriptionExpired(true);
         router.replace('/(billing)');
@@ -224,68 +236,6 @@ export default function LoginScreen() {
             Entrar.
           </Text>
 
-          {/* social buttons */}
-          <View style={{ gap: 10 }}>
-            <TouchableOpacity
-              onPress={handleGoogleLogin}
-              disabled={socialLoading !== null}
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 10,
-                height: 50,
-                borderRadius: btnRadius,
-                borderWidth: 1.5,
-                borderColor: colors.line,
-                backgroundColor: colors.surface,
-                opacity: socialLoading === 'google' ? 0.6 : 1,
-              }}
-            >
-              {/* Google "G" mark */}
-              <View
-                style={{
-                  width: 20,
-                  height: 20,
-                  borderRadius: 10,
-                  backgroundColor: '#4285F4',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                <Text style={{ fontFamily: 'HankenGrotesk_700Bold', fontSize: 12, color: '#fff', lineHeight: 14 }}>
-                  G
-                </Text>
-              </View>
-              <Text style={{ fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 14.5, color: colors.ink }}>
-                {socialLoading === 'google' ? 'Abrindo…' : 'Continuar com Google'}
-              </Text>
-            </TouchableOpacity>
-
-            {Platform.OS === 'ios' && (
-              <AppleAuthentication.AppleAuthenticationButton
-                buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
-                buttonStyle={
-                  colors.bg === '#08080a'
-                    ? AppleAuthentication.AppleAuthenticationButtonStyle.WHITE
-                    : AppleAuthentication.AppleAuthenticationButtonStyle.BLACK
-                }
-                cornerRadius={btnRadius}
-                style={{ height: 50 }}
-                onPress={handleAppleLogin}
-              />
-            )}
-          </View>
-
-          {/* divider */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-            <View style={{ flex: 1, height: 1.5, backgroundColor: colors.line }} />
-            <Text style={{ fontFamily: 'HankenGrotesk_700Bold', fontSize: 12, letterSpacing: 0.6, textTransform: 'uppercase', color: colors.ink3 }}>
-              ou
-            </Text>
-            <View style={{ flex: 1, height: 1.5, backgroundColor: colors.line }} />
-          </View>
-
           <View style={{ gap: 16 }}>
             <Field label="E-mail">
               <StyledInput
@@ -322,6 +272,54 @@ export default function LoginScreen() {
                 Esqueci minha senha
               </Text>
             </TouchableOpacity>
+          </View>
+
+          {/* divider */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+            <View style={{ flex: 1, height: 1.5, backgroundColor: colors.line }} />
+            <Text style={{ fontFamily: 'HankenGrotesk_700Bold', fontSize: 12, letterSpacing: 0.6, textTransform: 'uppercase', color: colors.ink3 }}>
+              ou
+            </Text>
+            <View style={{ flex: 1, height: 1.5, backgroundColor: colors.line }} />
+          </View>
+
+          {/* social buttons */}
+          <View style={{ gap: 10 }}>
+            <TouchableOpacity
+              onPress={handleGoogleLogin}
+              disabled={socialLoading !== null}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 10,
+                height: 50,
+                borderRadius: btnRadius,
+                borderWidth: 1.5,
+                borderColor: colors.line,
+                backgroundColor: colors.surface,
+                opacity: socialLoading === 'google' ? 0.6 : 1,
+              }}
+            >
+              <GoogleIcon size={18} />
+              <Text style={{ fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 14.5, color: colors.ink }}>
+                {socialLoading === 'google' ? 'Abrindo…' : 'Continuar com Google'}
+              </Text>
+            </TouchableOpacity>
+
+            {Platform.OS === 'ios' && (
+              <AppleAuthentication.AppleAuthenticationButton
+                buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
+                buttonStyle={
+                  colors.bg === '#08080a'
+                    ? AppleAuthentication.AppleAuthenticationButtonStyle.WHITE
+                    : AppleAuthentication.AppleAuthenticationButtonStyle.BLACK
+                }
+                cornerRadius={btnRadius}
+                style={{ height: 50 }}
+                onPress={handleAppleLogin}
+              />
+            )}
           </View>
         </View>
       </ScrollView>
