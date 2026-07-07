@@ -1,7 +1,6 @@
 import { create } from "zustand";
 import { clearToken, clearRememberMeToken } from "@/lib/auth";
 import { deregisterPushToken } from "@/lib/notifications";
-import { useOfflineStore } from "./offline.store";
 
 export type UserRole = "STUDENT" | "COACH";
 
@@ -61,7 +60,6 @@ export const useAuthStore = create<AuthState>((set) => ({
     await deregisterPushToken();
     await clearToken();
     await clearRememberMeToken();
-    useOfflineStore.getState().clearAll();
     set({
       isAuthenticated: false,
       userId: null,

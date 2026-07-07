@@ -11,6 +11,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useFocusEffect } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
+import NetInfo from '@react-native-community/netinfo';
 import { useTheme } from '@/theme';
 import { useAuthStore } from '@/store/auth.store';
 import { useStrengthStore } from '@/store/strength.store';
@@ -19,10 +20,12 @@ import { useBodyRecords, useLogWeight, useDeleteBodyRecord } from '@/api/hooks/u
 import { useNotifications } from '@/api/hooks/useNotifications';
 import { useSetGoal } from '@/api/hooks/useGoals';
 import { useWorkoutTemplates, useCreateWorkoutTemplate } from '@/api/hooks/useWorkoutTemplates';
-import { useWorkouts, useLogWorkout } from '@/api/hooks/useWorkouts';
+import { useWorkouts } from '@/api/hooks/useWorkouts';
+import { useSyncWorkoutSession, useDiscardWorkoutSession } from '@/api/hooks/useWorkoutSession';
 import { authClient } from '@/lib/auth';
 import { resetAnalytics, capture } from '@/lib/analytics';
-import type { WorkoutInput, Workout } from '@/types/api';
+import { debounce } from '@/lib/debounce';
+import type { Workout, WorkoutSessionSnapshot, WorkoutSessionSyncResult, WorkoutStatus } from '@/types/api';
 import { Logo } from '@/components/shared/Logo';
 import { Avatar } from '@/components/shared/Avatar';
 import { BellIcon } from '@/components/shared/BellIcon';
@@ -61,7 +64,8 @@ function workoutToSession(w: Workout): Session {
     targetMin: null,
     exercises: w.exercises.map((ex) => ({
       name: ex.name,
-      sets: ex.sets.map((s) => ({
+      sets: ex.sets.map((s, i) => ({
+        id: `${w.id}_${ex.name}_${i}`,
         weight: s.weight,
         reps: s.reps,
         type: (s.setType?.toLowerCase() ?? null) as SetType,
@@ -127,7 +131,8 @@ export default function DashboardScreen() {
   const { data: templatesRaw = [] } = useWorkoutTemplates();
   const { data: workoutsRaw = [] } = useWorkouts();
   const createTemplate = useCreateWorkoutTemplate();
-  const logWorkout = useLogWorkout();
+  const syncSession = useSyncWorkoutSession();
+  const discardRemoteSession = useDiscardWorkoutSession();
 
   const templates = templatesRaw;
   const sessions = React.useMemo(() => workoutsRaw.map(workoutToSession), [workoutsRaw]);
@@ -209,7 +214,12 @@ export default function DashboardScreen() {
     router.replace('/(auth)/login');
   }
 
+  // sessão anterior ainda sendo finalizada em background (ver finishSession) — não deixa
+  // sobrescrever até o checkpoint COMPLETED ter sucesso
+  const finishingPrevious = activeSession?.status === 'COMPLETED';
+
   function startTemplate(t: import('@/store/strength.store').Template) {
+    if (finishingPrevious) return;
     setActiveSession({
       id: uid(),
       date: todayISO(),
@@ -222,11 +232,13 @@ export default function DashboardScreen() {
       accumulatedSec: 0,
       targetMin: t.targetMin,
       exercises: t.exercises.map((name) => ({ name, sets: [] })),
+      status: 'IN_PROGRESS',
     });
     setStrengthView('active');
   }
 
   function startYolo() {
+    if (finishingPrevious) return;
     setActiveSession({
       id: uid(),
       date: todayISO(),
@@ -239,65 +251,110 @@ export default function DashboardScreen() {
       accumulatedSec: 0,
       targetMin: null,
       exercises: [],
+      status: 'IN_PROGRESS',
     });
     setStrengthView('active');
   }
 
-  async function finishSession() {
-    if (!activeSession) return;
-    const live = activeSession.startedAt
-      ? Math.max(0, Math.floor((Date.now() - activeSession.startedAt) / 1000))
+  function buildSnapshot(session: ActiveSessionType, status: WorkoutStatus): WorkoutSessionSnapshot {
+    const live = session.startedAt
+      ? Math.max(0, Math.floor((Date.now() - session.startedAt) / 1000))
       : 0;
-    const durationSec = (activeSession.accumulatedSec || 0) + live;
-
-    const input: WorkoutInput = {
-      performedAt: new Date(activeSession.date + 'T12:00:00').toISOString(),
-      durationSec,
-      templateId: activeSession.templateId,
-      templateName: activeSession.templateName,
-      programId: activeSession.programId,
-      programName: activeSession.programName,
-      exercises: activeSession.exercises
+    return {
+      performedAt: new Date(session.date + 'T12:00:00').toISOString(),
+      durationSec: (session.accumulatedSec || 0) + live,
+      templateId: session.templateId,
+      templateName: session.templateName,
+      programId: session.programId,
+      programName: session.programName,
+      status,
+      exercises: session.exercises
         .filter((ex) => ex.sets.length > 0)
         .map((ex) => ({
           name: ex.name,
           sets: ex.sets.map((s, i) => ({
+            clientSetId: s.id,
             setNumber: i + 1,
-            setType: (s.type?.toUpperCase() ?? 'WORK') as WorkoutInput['exercises'][0]['sets'][0]['setType'],
+            setType: (s.type?.toUpperCase() ?? 'WORK') as WorkoutSessionSnapshot['exercises'][0]['sets'][0]['setType'],
             reps: s.reps,
             weight: s.weight,
           })),
         })),
     };
+  }
 
-    setActiveSession(null);
+  function handleSyncResult(result: WorkoutSessionSyncResult) {
+    if (result.newPRs.length > 0) {
+      for (const pr of result.newPRs) {
+        capture('pr_achieved', { exerciseName: pr.exerciseName });
+      }
+      const mappedPRs = result.newPRs.map((pr) => ({
+        exercise: pr.exerciseName,
+        e: round1(pr.estimated1RM),
+        prevBest: round1(pr.prevBest),
+        weight: null as number | null,
+        reps: null as number | null,
+      }));
+      setPendingPRs(mappedPRs);
+      setShowPRs(true);
+    }
+  }
+
+  const debouncedSync = React.useMemo(
+    () =>
+      debounce((session: ActiveSessionType) => {
+        syncSession.mutate(
+          { clientId: session.id, snapshot: buildSnapshot(session, 'IN_PROGRESS') },
+          { onSuccess: handleSyncResult },
+        );
+      }, 400),
+    [syncSession],
+  );
+
+  // sync a cada mudança de conteúdo (séries/exercícios) — não em cada tick do timer
+  React.useEffect(() => {
+    if (!activeSession || activeSession.status === 'COMPLETED') return;
+    if (activeSession.exercises.every((e) => e.sets.length === 0)) return;
+    debouncedSync(activeSession);
+    return () => debouncedSync.cancel();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intencionalmente não observa startedAt/accumulatedSec
+  }, [activeSession?.exercises]);
+
+  // retry ao reconectar — não depende de fila offline, só reenvia o snapshot atual
+  React.useEffect(() => {
+    const unsub = NetInfo.addEventListener((state) => {
+      if (!state.isConnected || !activeSession) return;
+      const hasContent = activeSession.exercises.some((e) => e.sets.length > 0);
+      if (hasContent) debouncedSync(activeSession);
+    });
+    return unsub;
+  }, [activeSession, debouncedSync]);
+
+  async function finishSession() {
+    if (!activeSession) return;
+    debouncedSync.cancel(); // evita que um sync IN_PROGRESS atrasado sobrescreva o COMPLETED
+    updateActiveSession((a) => ({ ...a, status: 'COMPLETED' }));
     setStrengthView('entry');
 
+    const snapshot = buildSnapshot(activeSession, 'COMPLETED');
     try {
-      const workout = await logWorkout.mutateAsync(input);
-      capture('workout_logged', { exerciseCount: input.exercises.length });
-      if (workout.prs && workout.prs.length > 0) {
-        for (const pr of workout.prs) {
-          capture('pr_achieved', { exerciseName: pr.exerciseName });
-        }
-        const mappedPRs = workout.prs.map((pr) => ({
-          exercise: pr.exerciseName,
-          e: round1(pr.estimated1RM),
-          prevBest: round1(pr.prevBest),
-          weight: null as number | null,
-          reps: null as number | null,
-        }));
-        setPendingPRs(mappedPRs);
-        setShowPRs(true);
-      }
+      const result = await syncSession.mutateAsync({ clientId: activeSession.id, snapshot });
+      setActiveSession(null);
+      queryClient.invalidateQueries({ queryKey: ['workouts'] });
+      capture('workout_logged', { exerciseCount: snapshot.exercises.length });
+      handleSyncResult(result);
     } catch {
-      // offline: will sync when reconnected via useWorkoutSync
+      // offline: a sessão com status COMPLETED continua persistida em disco; o listener
+      // de reconexão acima reenvia automaticamente quando a rede voltar.
     }
   }
 
   function discardSession() {
+    debouncedSync.cancel(); // evita ressuscitar um rascunho recém descartado
+    const clientId = activeSession?.id;
     setActiveSession(null);
     setStrengthView('entry');
+    if (clientId) discardRemoteSession.mutate(clientId);
   }
 
   if (profileLoading && recordsLoading) {

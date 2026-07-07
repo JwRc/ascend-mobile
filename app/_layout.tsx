@@ -22,6 +22,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ThemeContext, buildTheme } from '@/theme';
 import { useUIStore } from '@/store/ui.store';
 import { useAuthStore, type UserRole } from '@/store/auth.store';
+import { useStrengthStore } from '@/store/strength.store';
 import {
   authClient,
   getRememberMeToken,
@@ -118,6 +119,15 @@ export default function RootLayout() {
   const theme = buildTheme(isDark, direction, accent);
   const { setSession, markHydrated, setSubscriptionExpired } = useAuthStore();
   const [sessionChecked, setSessionChecked] = React.useState(false);
+  const [strengthHydrated, setStrengthHydrated] = React.useState(
+    () => useStrengthStore.persist.hasHydrated(),
+  );
+
+  React.useEffect(() => {
+    if (strengthHydrated) return;
+    const unsub = useStrengthStore.persist.onFinishHydration(() => setStrengthHydrated(true));
+    return unsub;
+  }, [strengthHydrated]);
 
   const [fontsLoaded, fontError] = useFonts({
     Archivo_800ExtraBold,
@@ -207,7 +217,7 @@ export default function RootLayout() {
     SplashScreen.hideAsync();
   }, []);
 
-  if (!fontsReady || !sessionChecked) return <BootScreen accent={accent} />;
+  if (!fontsReady || !sessionChecked || !strengthHydrated) return <BootScreen accent={accent} />;
 
   return (
     <PostHogProvider client={posthog ?? undefined}>

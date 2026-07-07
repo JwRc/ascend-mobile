@@ -1,5 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
+import { useQueryClient } from '@tanstack/react-query';
+import NetInfo from '@react-native-community/netinfo';
 import { useTheme, semanticColors } from '@/theme';
 import { SegmentedControl } from '@/components/shared/SegmentedControl';
 import { Card } from '@/components/shared/Card';
@@ -13,13 +15,15 @@ import { TemplateEditorModal } from '@/components/strength/TemplateEditorModal';
 import { useBodyRecords, useLogWeight, useDeleteBodyRecord } from '@/api/hooks/useBodyRecords';
 import { useStudentProfile } from '@/api/hooks/useStudentProfile';
 import { useWorkoutTemplates, useCreateWorkoutTemplate } from '@/api/hooks/useWorkoutTemplates';
-import { useWorkouts, useLogWorkout } from '@/api/hooks/useWorkouts';
+import { useWorkouts } from '@/api/hooks/useWorkouts';
+import { useSyncWorkoutSession, useDiscardWorkoutSession } from '@/api/hooks/useWorkoutSession';
 import { useStrengthStore } from '@/store/strength.store';
 import {
-  round1, movingAverage, weighInStreak, last7Days, convert, fmtDateLong, todayISO, classifySets,
+  round1, movingAverage, weighInStreak, last7Days, convert, fmtDateLong, todayISO,
 } from '@/lib/utils';
-import type { WorkoutInput, Workout } from '@/types/api';
-import type { Session, SetType, WorkSet, Template } from '@/store/strength.store';
+import { debounce } from '@/lib/debounce';
+import type { Workout, WorkoutSessionSnapshot, WorkoutSessionSyncResult, WorkoutStatus } from '@/types/api';
+import type { ActiveSession as ActiveSessionType, Session, SetType, WorkSet, Template } from '@/store/strength.store';
 
 function uid() {
   return Math.random().toString(36).slice(2, 10);
@@ -37,7 +41,8 @@ function workoutToSession(w: Workout): Session {
     targetMin: null,
     exercises: w.exercises.map((ex) => ({
       name: ex.name,
-      sets: ex.sets.map((s) => ({
+      sets: ex.sets.map((s, i) => ({
+        id: `${w.id}_${ex.name}_${i}`,
         weight: s.weight,
         reps: s.reps,
         type: (s.setType?.toLowerCase() ?? null) as SetType,
@@ -58,6 +63,7 @@ type Props = { units: 'kg' | 'lb' };
 export function StudentOwnSection({ units }: Props) {
   const { colors, direction } = useTheme();
   const u = units;
+  const queryClient = useQueryClient();
 
   const { data: bodyRecords = [] } = useBodyRecords();
   const { data: profile } = useStudentProfile();
@@ -65,8 +71,9 @@ export function StudentOwnSection({ units }: Props) {
   const { data: workoutsRaw = [] } = useWorkouts();
   const logWeight = useLogWeight();
   const deleteRecord = useDeleteBodyRecord();
-  const logWorkout = useLogWorkout();
   const createTemplate = useCreateWorkoutTemplate();
+  const syncSession = useSyncWorkoutSession();
+  const discardRemoteSession = useDiscardWorkoutSession();
   const { activeSession, setActiveSession, updateActiveSession } = useStrengthStore();
 
   const [tab, setTab] = React.useState<'weight' | 'strength'>('strength');
@@ -127,7 +134,12 @@ export function StudentOwnSection({ units }: Props) {
   const trendNeutral = weekDelta === 0;
   const trendColor = trendNeutral ? colors.ink3 : trendGood ? semanticColors.success : semanticColors.warning;
 
+  // sessão anterior ainda sendo finalizada em background (ver finishSession) — não deixa
+  // sobrescrever até o checkpoint COMPLETED ter sucesso
+  const finishingPrevious = activeSession?.status === 'COMPLETED';
+
   function startTemplate(t: Template) {
+    if (finishingPrevious) return;
     setActiveSession({
       id: uid(),
       date: todayISO(),
@@ -140,11 +152,13 @@ export function StudentOwnSection({ units }: Props) {
       accumulatedSec: 0,
       targetMin: t.targetMin,
       exercises: t.exercises.map((name) => ({ name, sets: [] })),
+      status: 'IN_PROGRESS',
     });
     setStrengthView('active');
   }
 
   function startYolo() {
+    if (finishingPrevious) return;
     setActiveSession({
       id: uid(),
       date: todayISO(),
@@ -157,60 +171,105 @@ export function StudentOwnSection({ units }: Props) {
       accumulatedSec: 0,
       targetMin: null,
       exercises: [],
+      status: 'IN_PROGRESS',
     });
     setStrengthView('active');
   }
 
-  async function finishSession() {
-    if (!activeSession) return;
-    const live = activeSession.startedAt
-      ? Math.max(0, Math.floor((Date.now() - activeSession.startedAt) / 1000))
+  function buildSnapshot(session: ActiveSessionType, status: WorkoutStatus): WorkoutSessionSnapshot {
+    const live = session.startedAt
+      ? Math.max(0, Math.floor((Date.now() - session.startedAt) / 1000))
       : 0;
-    const durationSec = (activeSession.accumulatedSec || 0) + live;
-    const input: WorkoutInput = {
-      performedAt: new Date(activeSession.date + 'T12:00:00').toISOString(),
-      durationSec,
-      templateId: activeSession.templateId,
-      templateName: activeSession.templateName,
-      programId: activeSession.programId,
-      programName: activeSession.programName,
-      exercises: activeSession.exercises
+    return {
+      performedAt: new Date(session.date + 'T12:00:00').toISOString(),
+      durationSec: (session.accumulatedSec || 0) + live,
+      templateId: session.templateId,
+      templateName: session.templateName,
+      programId: session.programId,
+      programName: session.programName,
+      status,
+      exercises: session.exercises
         .filter((ex) => ex.sets.length > 0)
         .map((ex) => ({
           name: ex.name,
-          sets: (() => {
-            const inferred = classifySets(ex.sets);
-            return ex.sets.map((s, i) => ({
-              setNumber: i + 1,
-              setType: ((s.type ?? inferred[i] ?? 'work').toUpperCase()) as WorkoutInput['exercises'][0]['sets'][0]['setType'],
-              reps: s.reps,
-              weight: s.weight,
-            }));
-          })(),
+          sets: ex.sets.map((s, i) => ({
+            clientSetId: s.id,
+            setNumber: i + 1,
+            setType: (s.type?.toUpperCase() ?? 'WORK') as WorkoutSessionSnapshot['exercises'][0]['sets'][0]['setType'],
+            reps: s.reps,
+            weight: s.weight,
+          })),
         })),
     };
-    setActiveSession(null);
-    setStrengthView('entry');
-    try {
-      const workout = await logWorkout.mutateAsync(input);
-      if (workout.prs && workout.prs.length > 0) {
-        setPendingPRs(
-          workout.prs.map((pr) => ({
-            exercise: pr.exerciseName,
-            e: round1(pr.estimated1RM),
-            prevBest: round1(pr.prevBest),
-            weight: null,
-            reps: null,
-          })),
+  }
+
+  function handleSyncResult(result: WorkoutSessionSyncResult) {
+    if (result.newPRs.length > 0) {
+      setPendingPRs(
+        result.newPRs.map((pr) => ({
+          exercise: pr.exerciseName,
+          e: round1(pr.estimated1RM),
+          prevBest: round1(pr.prevBest),
+          weight: null,
+          reps: null,
+        })),
+      );
+      setShowPRs(true);
+    }
+  }
+
+  const debouncedSync = React.useMemo(
+    () =>
+      debounce((session: ActiveSessionType) => {
+        syncSession.mutate(
+          { clientId: session.id, snapshot: buildSnapshot(session, 'IN_PROGRESS') },
+          { onSuccess: handleSyncResult },
         );
-        setShowPRs(true);
-      }
-    } catch { /* offline — will sync */ }
+      }, 400),
+    [syncSession],
+  );
+
+  React.useEffect(() => {
+    if (!activeSession || activeSession.status === 'COMPLETED') return;
+    if (activeSession.exercises.every((e) => e.sets.length === 0)) return;
+    debouncedSync(activeSession);
+    return () => debouncedSync.cancel();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intencionalmente não observa startedAt/accumulatedSec
+  }, [activeSession?.exercises]);
+
+  React.useEffect(() => {
+    const unsub = NetInfo.addEventListener((state) => {
+      if (!state.isConnected || !activeSession) return;
+      const hasContent = activeSession.exercises.some((e) => e.sets.length > 0);
+      if (hasContent) debouncedSync(activeSession);
+    });
+    return unsub;
+  }, [activeSession, debouncedSync]);
+
+  async function finishSession() {
+    if (!activeSession) return;
+    debouncedSync.cancel(); // evita que um sync IN_PROGRESS atrasado sobrescreva o COMPLETED
+    updateActiveSession((a) => ({ ...a, status: 'COMPLETED' }));
+    setStrengthView('entry');
+
+    const snapshot = buildSnapshot(activeSession, 'COMPLETED');
+    try {
+      const result = await syncSession.mutateAsync({ clientId: activeSession.id, snapshot });
+      setActiveSession(null);
+      queryClient.invalidateQueries({ queryKey: ['workouts'] });
+      handleSyncResult(result);
+    } catch {
+      // offline: a sessão com status COMPLETED continua persistida em disco; o listener
+      // de reconexão acima reenvia automaticamente quando a rede voltar.
+    }
   }
 
   function discardSession() {
+    debouncedSync.cancel(); // evita ressuscitar um rascunho recém descartado
+    const clientId = activeSession?.id;
     setActiveSession(null);
     setStrengthView('entry');
+    if (clientId) discardRemoteSession.mutate(clientId);
   }
 
   return (

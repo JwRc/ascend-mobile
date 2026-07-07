@@ -1,9 +1,12 @@
 import { create } from 'zustand';
-import { epley1RM, round1, todayISO } from '@/lib/utils';
+import { persist, createJSONStorage } from 'zustand/middleware';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { classifySets, epley1RM, round1, todayISO } from '@/lib/utils';
 
 export type SetType = 'warmup' | 'prep' | 'feeder' | 'work' | null;
 
 export type WorkSet = {
+  id: string; // clientSetId — estável entre syncs, gerado na criação
   weight: number;
   reps: number;
   type: SetType;
@@ -35,7 +38,7 @@ export type Template = {
 };
 
 export type ActiveSession = {
-  id: string;
+  id: string; // também usado como clientId no sync com o backend
   date: string;
   templateId: string | null;
   templateName: string;
@@ -46,6 +49,9 @@ export type ActiveSession = {
   accumulatedSec: number;
   targetMin: number | null;
   exercises: Exercise[];
+  // 'COMPLETED' marca que o usuário já tocou em Finalizar — a sessão fica persistida
+  // até o checkpoint final ter sucesso, mesmo offline (ver finishSession em index.tsx)
+  status: 'IN_PROGRESS' | 'COMPLETED';
 };
 
 type StrengthState = {
@@ -66,7 +72,7 @@ type StrengthState = {
   updateActiveSession: (fn: (prev: ActiveSession) => ActiveSession) => void;
 };
 
-function uid(prefix: string) {
+export function uid(prefix: string) {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
 }
 
@@ -88,6 +94,39 @@ export function sessionsWithExercise(sessions: Session[], name: string): Session
   );
 }
 
+export type BestSet = { weight: number; reps: number };
+
+export function bestWorkSet(sets: WorkSet[]): BestSet | null {
+  const types = classifySets(sets);
+  let best: (BestSet & { e: number }) | null = null;
+  sets.forEach((s, i) => {
+    if (types[i] !== 'work') return;
+    const e = epley1RM(s.weight, s.reps);
+    if (!best || e > best.e) best = { weight: s.weight, reps: s.reps, e };
+  });
+  return best;
+}
+
+export function bestAnySet(sets: WorkSet[]): BestSet | null {
+  let best: (BestSet & { e: number }) | null = null;
+  sets.forEach((s) => {
+    const e = epley1RM(s.weight, s.reps);
+    if (!best || e > best.e) best = { weight: s.weight, reps: s.reps, e };
+  });
+  return best;
+}
+
+/** Melhor série (peso × reps) já registrada pra um exercício, combinando histórico + séries ainda não salvas da sessão ativa. */
+export function currentPR(sessions: Session[], name: string, liveSets: WorkSet[] = []): BestSet | null {
+  const historicalSets = sessionsWithExercise(sessions, name).flatMap((s) => {
+    const ex = s.exercises.find((e) => e.name.toLowerCase() === name.toLowerCase());
+    return ex ? ex.sets : [];
+  });
+  const allSets = [...historicalSets, ...liveSets];
+  if (!allSets.length) return null;
+  return bestWorkSet(allSets) || bestAnySet(allSets);
+}
+
 export function allExerciseNames(sessions: Session[], templates: Template[]): string[] {
   const set = new Set<string>();
   sessions.forEach((s) => s.exercises.forEach((e) => set.add(e.name)));
@@ -95,25 +134,37 @@ export function allExerciseNames(sessions: Session[], templates: Template[]): st
   return Array.from(set).sort();
 }
 
-export const useStrengthStore = create<StrengthState>((set) => ({
-  templates: seedTemplates(),
-  sessions: [],
-  activeSession: null,
+export const useStrengthStore = create<StrengthState>()(
+  persist(
+    (set) => ({
+      templates: seedTemplates(),
+      sessions: [],
+      activeSession: null,
 
-  setTemplates: (templates) => set({ templates }),
-  addTemplate: (t) => set((s) => ({ templates: [...s.templates, t] })),
-  updateTemplate: (t) =>
-    set((s) => ({ templates: s.templates.map((x) => (x.id === t.id ? t : x)) })),
-  deleteTemplate: (id) => set((s) => ({ templates: s.templates.filter((t) => t.id !== id) })),
+      setTemplates: (templates) => set({ templates }),
+      addTemplate: (t) => set((s) => ({ templates: [...s.templates, t] })),
+      updateTemplate: (t) =>
+        set((s) => ({ templates: s.templates.map((x) => (x.id === t.id ? t : x)) })),
+      deleteTemplate: (id) => set((s) => ({ templates: s.templates.filter((t) => t.id !== id) })),
 
-  setSessions: (sessions) => set({ sessions }),
-  addSession: (session) =>
-    set((s) => ({
-      sessions: [...s.sessions, session].sort((a, b) => a.date.localeCompare(b.date)),
-    })),
-  deleteSession: (id) => set((s) => ({ sessions: s.sessions.filter((x) => x.id !== id) })),
+      setSessions: (sessions) => set({ sessions }),
+      addSession: (session) =>
+        set((s) => ({
+          sessions: [...s.sessions, session].sort((a, b) => a.date.localeCompare(b.date)),
+        })),
+      deleteSession: (id) => set((s) => ({ sessions: s.sessions.filter((x) => x.id !== id) })),
 
-  setActiveSession: (activeSession) => set({ activeSession }),
-  updateActiveSession: (fn) =>
-    set((s) => (s.activeSession ? { activeSession: fn(s.activeSession) } : {})),
-}));
+      setActiveSession: (activeSession) => set({ activeSession }),
+      updateActiveSession: (fn) =>
+        set((s) => (s.activeSession ? { activeSession: fn(s.activeSession) } : {})),
+    }),
+    {
+      name: 'ascentio-active-session',
+      storage: createJSONStorage(() => AsyncStorage),
+      // templates/sessions vêm da API (React Query) — só a sessão ativa precisa
+      // sobreviver a um kill do app, então é só ela que vai pro disco.
+      partialize: (state) => ({ activeSession: state.activeSession }),
+      version: 1,
+    },
+  ),
+);

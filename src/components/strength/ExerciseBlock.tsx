@@ -3,7 +3,7 @@ import { View, Text, TouchableOpacity } from 'react-native';
 import { useTheme } from '@/theme';
 import { Card } from '@/components/shared/Card';
 import { AddSetForm } from './AddSetForm';
-import { WorkSet, SetType } from '@/store/strength.store';
+import { WorkSet, SetType, type BestSet } from '@/store/strength.store';
 import { round1, epley1RM, classifySets } from '@/lib/utils';
 
 const SET_TYPE_LABEL: Record<string, string> = {
@@ -26,11 +26,12 @@ type Props = {
   unit: 'kg' | 'lb';
   defaultWeight: number;
   defaultReps: number;
-  onAddSet: (s: WorkSet) => void;
+  currentPR: BestSet | null;
+  onAddSet: (s: Omit<WorkSet, 'id'>) => void;
   onRemoveSet: (i: number) => void;
 };
 
-export function ExerciseBlock({ name, sets, unit, defaultWeight, defaultReps, onAddSet, onRemoveSet }: Props) {
+export function ExerciseBlock({ name, sets, unit, defaultWeight, defaultReps, currentPR, onAddSet, onRemoveSet }: Props) {
   const { colors, direction, radius } = useTheme();
   const [addingSet, setAddingSet] = React.useState(false);
   const inferredTypes = classifySets(sets);
@@ -38,7 +39,7 @@ export function ExerciseBlock({ name, sets, unit, defaultWeight, defaultReps, on
   return (
     <Card style={{ gap: 14 }}>
       {/* header */}
-      <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between' }}>
+      <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' }}>
         <Text
           style={{
             fontFamily: 'Archivo_800ExtraBold',
@@ -52,9 +53,16 @@ export function ExerciseBlock({ name, sets, unit, defaultWeight, defaultReps, on
         >
           {name}
         </Text>
-        <Text style={{ fontFamily: 'HankenGrotesk_700Bold', fontSize: 12, color: colors.ink3 }}>
-          {sets.length} {sets.length === 1 ? 'série' : 'séries'}
-        </Text>
+        <View style={{ alignItems: 'flex-end' }}>
+          <Text style={{ fontFamily: 'HankenGrotesk_700Bold', fontSize: 12, color: colors.ink3 }}>
+            {sets.length} {sets.length === 1 ? 'série' : 'séries'}
+          </Text>
+          {currentPR && (
+            <Text style={{ fontFamily: 'HankenGrotesk_700Bold', fontSize: 12, color: colors.ink3 }}>
+              PR: {round1(currentPR.weight)}{unit} × {currentPR.reps}
+            </Text>
+          )}
+        </View>
       </View>
 
       {/* set log table */}
@@ -95,7 +103,7 @@ export function ExerciseBlock({ name, sets, unit, defaultWeight, defaultReps, on
 
             return (
               <View
-                key={i}
+                key={s.id}
                 style={{
                   flexDirection: 'row',
                   alignItems: 'center',

@@ -87,6 +87,30 @@ export type WorkoutInput = {
   }[];
 };
 
+export type WorkoutStatus = 'IN_PROGRESS' | 'COMPLETED';
+
+export type WorkoutSessionSnapshot = {
+  performedAt: string;
+  durationSec: number;
+  templateId?: string | null;
+  templateName?: string | null;
+  programId?: string | null;
+  programName?: string | null;
+  status: WorkoutStatus;
+  exercises: {
+    name: string;
+    sets: {
+      clientSetId: string;
+      setNumber: number;
+      setType: WorkoutSetType;
+      reps: number;
+      weight: number;
+    }[];
+  }[];
+};
+
+export type WorkoutSessionSyncResult = Workout & { newPRs: PR[]; clientId: string };
+
 export type WorkoutTemplate = {
   id: string;
   name: string;

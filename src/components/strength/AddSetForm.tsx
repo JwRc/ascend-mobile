@@ -17,7 +17,7 @@ type Props = {
   unit: 'kg' | 'lb';
   defaultWeight: number;
   defaultReps: number;
-  onAdd: (set: WorkSet) => void;
+  onAdd: (set: Omit<WorkSet, 'id'>) => void;
   onCancel: () => void;
 };
 

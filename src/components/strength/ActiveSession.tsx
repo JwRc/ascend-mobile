@@ -16,7 +16,9 @@ import {
   WorkSet,
   exercisePeak1RM,
   sessionsWithExercise,
+  currentPR,
   Session,
+  uid,
 } from '@/store/strength.store';
 import { fmtDateLong, round1, epley1RM } from '@/lib/utils';
 
@@ -81,11 +83,11 @@ export function ActiveSession({ active, sessions, unit, onUpdateActive, onFinish
     }));
   }
 
-  function addSet(exIdx: number, set: WorkSet) {
+  function addSet(exIdx: number, set: Omit<WorkSet, 'id'>) {
     onUpdateActive((a) => ({
       ...a,
       exercises: a.exercises.map((e, i) =>
-        i === exIdx ? { ...e, sets: [...e.sets, set] } : e
+        i === exIdx ? { ...e, sets: [...e.sets, { ...set, id: uid('set') }] } : e
       ),
     }));
   }
@@ -235,6 +237,7 @@ export function ActiveSession({ active, sessions, unit, onUpdateActive, onFinish
           unit={unit}
           defaultWeight={getDefaults(block.name).weight}
           defaultReps={getDefaults(block.name).reps}
+          currentPR={currentPR(sessions, block.name, block.sets)}
           onAddSet={(set) => addSet(i, set)}
           onRemoveSet={(k) => removeSet(i, k)}
         />
