@@ -334,6 +334,14 @@ export default function CoachHomeScreen() {
           }}
         >
           <TouchableOpacity
+            onPress={() => { setMenuOpen(false); router.push('/(coach)/support'); }}
+            style={{ padding: 11, borderRadius: 6 }}
+          >
+            <Text style={{ fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 14, color: colors.ink2 }}>
+              Suporte
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
             onPress={() => { setMenuOpen(false); handleLogout(); }}
             style={{ padding: 11, borderRadius: 6 }}
           >

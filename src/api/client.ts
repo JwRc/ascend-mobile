@@ -2,9 +2,11 @@ import axios from "axios";
 import * as SecureStore from "expo-secure-store";
 import { router } from "expo-router";
 import {
+  authClient,
   getRememberMeToken,
   parseRememberMeJwt,
   isRememberMeValid,
+  refreshRememberMeToken,
 } from "@/lib/auth";
 import { useAuthStore } from "@/store/auth.store";
 
@@ -19,8 +21,31 @@ api.interceptors.request.use(async (config) => {
   return config;
 });
 
+// Um 401 isolado (ex: refetch de fundo pego no meio de uma rotação de token)
+// não deve derrubar a sessão inteira — revalida uma vez antes de desistir.
+// 401s concorrentes (vários refetches em paralelo no resume do app) compartilham
+// essa mesma checagem em vez de disparar N chamadas e N navegações.
+let sessionRevalidation: Promise<boolean> | null = null;
+function hasLiveSession(): Promise<boolean> {
+  if (!sessionRevalidation) {
+    sessionRevalidation = authClient
+      .getSession()
+      .then(({ data }) => !!(data?.session && data?.user))
+      .catch(() => false)
+      .finally(() => {
+        sessionRevalidation = null;
+      });
+  }
+  return sessionRevalidation;
+}
+
 api.interceptors.response.use(
-  (res) => res,
+  (res) => {
+    // Renova o remember-me a cada resposta autenticada bem-sucedida (throttled
+    // internamente) — mantém o fallback offline sempre fresco em sessões longas.
+    void refreshRememberMeToken();
+    return res;
+  },
   async (err) => {
     // Sem resposta do servidor = erro de rede (offline)
     if (!err.response) {
@@ -56,8 +81,11 @@ api.interceptors.response.use(
     }
 
     if (err.response?.status === 401) {
-      await useAuthStore.getState().clearSession();
-      router.replace("/(auth)/login");
+      const stillValid = await hasLiveSession();
+      if (!stillValid) {
+        await useAuthStore.getState().clearSession();
+        router.replace("/(auth)/login");
+      }
     }
 
     return Promise.reject(err);

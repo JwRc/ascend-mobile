@@ -10,22 +10,8 @@ import { GoogleIcon } from '@/components/shared/GoogleIcon';
 import { Btn } from '@/components/shared/Btn';
 import { Field, StyledInput } from '@/components/shared/Field';
 import { useAuthStore, type UserRole } from '@/store/auth.store';
-import { authClient, persistToken, persistRememberMeToken } from '@/lib/auth';
+import { authClient, persistToken, refreshRememberMeToken } from '@/lib/auth';
 import { identify } from '@/lib/analytics';
-
-const API_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
-
-async function fetchRememberMeToken() {
-  try {
-    const res = await fetch(`${API_URL}/remember-me`, { method: 'POST' });
-    if (res.ok) {
-      const { token } = await res.json();
-      if (token) await persistRememberMeToken(token);
-    }
-  } catch {
-    // não crítico — usuário ainda está autenticado online
-  }
-}
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -84,7 +70,7 @@ export default function LoginScreen() {
       const role: UserRole = user?.role === 'COACH' ? 'COACH' : 'STUDENT';
       setSession(user?.id ?? '', user?.email ?? email, role, { tenantId: user?.tenantId ?? null });
       identify(user?.id ?? '', role.toLowerCase());
-      await fetchRememberMeToken();
+      await refreshRememberMeToken(true);
       router.replace(role === 'COACH' ? '/(coach)' : '/(app)');
     } catch (e: any) {
       const status = e?.status ?? e?.response?.status ?? e?.statusCode;
@@ -111,7 +97,7 @@ export default function LoginScreen() {
     const role: UserRole = user?.role === 'COACH' ? 'COACH' : 'STUDENT';
     setSession(user?.id ?? '', user?.email ?? '', role);
     identify(user?.id ?? '', role.toLowerCase());
-    await fetchRememberMeToken();
+    await refreshRememberMeToken(true);
     router.replace(role === 'COACH' ? '/(coach)' : '/(app)');
   }
 

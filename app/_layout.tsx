@@ -28,7 +28,7 @@ import {
   getRememberMeToken,
   parseRememberMeJwt,
   isRememberMeValid,
-  persistRememberMeToken,
+  refreshRememberMeToken,
 } from '@/lib/auth';
 import { StripeProvider } from '@stripe/stripe-react-native';
 import { PostHogProvider } from 'posthog-react-native';
@@ -37,17 +37,26 @@ import { registerPushToken } from '@/lib/notifications';
 
 SplashScreen.preventAutoHideAsync();
 
-const API_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
-
-async function fetchAndStoreRememberMeToken() {
+async function getSessionOnce() {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
   try {
-    const res = await fetch(`${API_URL}/remember-me`, { method: 'POST' });
-    if (res.ok) {
-      const { token } = await res.json();
-      if (token) await persistRememberMeToken(token);
-    }
-  } catch {
-    // sem internet ou backend indisponível — não é crítico
+    return await authClient.getSession({ fetchOptions: { signal: controller.signal } });
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+// Uma lentidão pontual de rede (comum em wifi de academia) não deve empurrar
+// direto pro fallback offline — tenta mais uma vez antes de desistir.
+async function getSessionWithRetry() {
+  try {
+    return await getSessionOnce();
+  } catch (err: any) {
+    const status = err?.status ?? err?.response?.status ?? err?.statusCode;
+    if (status) throw err; // erro de servidor de verdade — não é transitório, não repete
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+    return getSessionOnce();
   }
 }
 
@@ -147,11 +156,7 @@ export default function RootLayout() {
       // (incluindo "sem sessão"). Só usamos offline quando não há resposta de rede.
       let serverResponded = false;
       try {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 8000);
-        const { data } = await authClient.getSession({
-          fetchOptions: { signal: controller.signal },
-        }).finally(() => clearTimeout(timeout));
+        const { data } = await getSessionWithRetry();
         console.log('RESTORE SESSION - resposta', data);
 
         serverResponded = true;
@@ -162,7 +167,7 @@ export default function RootLayout() {
           setSession(u.id, u.email, role, { tenantId: u.tenantId ?? null });
           identify(u.id, role.toLowerCase());
           void registerPushToken();
-          fetchAndStoreRememberMeToken();
+          void refreshRememberMeToken(true);
           return;
         }
         // Servidor respondeu mas não há sessão válida → não usar modo offline
@@ -192,6 +197,7 @@ export default function RootLayout() {
           if (claims && isRememberMeValid(claims)) {
             const role: UserRole = claims.role === 'COACH' ? 'COACH' : 'STUDENT';
             setSession(claims.userId, claims.email, role, {
+              tenantId: claims.tenantId ?? null,
               plan: claims.plan,
               offlineGraceUntil: claims.offlineGraceUntil,
               isOfflineSession: true,

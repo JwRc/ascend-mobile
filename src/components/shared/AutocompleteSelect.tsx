@@ -43,9 +43,15 @@ export function AutocompleteSelect({ options, value, onChange, placeholder = 'Bu
   }
 
   function handleBlur() {
-    if (touchingItem.current) return;
-    setOpen(false);
-    setQuery('');
+    // O onBlur do TextInput dispara antes do onPressIn/onPress do item da lista
+    // terminarem (o toque ainda está em andamento) — se fechar synchronamente
+    // aqui, a lista desmonta no meio do toque e a seleção nunca chega a rodar.
+    // Adia a checagem pra depois do toque ter tido chance de setar touchingItem.
+    setTimeout(() => {
+      if (touchingItem.current) return;
+      setOpen(false);
+      setQuery('');
+    }, 150);
   }
 
   const inputRadius = direction === 'A' ? 4 : 10;
@@ -128,7 +134,7 @@ export function AutocompleteSelect({ options, value, onChange, placeholder = 'Bu
               </Text>
             </View>
           ) : (
-            <ScrollView keyboardShouldPersistTaps="handled" bounces={false}>
+            <ScrollView keyboardShouldPersistTaps="handled" bounces={false} nestedScrollEnabled>
               {filtered.map((o, i) => (
                 <TouchableOpacity
                   key={o}

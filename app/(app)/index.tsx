@@ -304,8 +304,22 @@ export default function DashboardScreen() {
     () =>
       debounce((session: ActiveSessionType) => {
         syncSession.mutate(
-          { clientId: session.id, snapshot: buildSnapshot(session, 'IN_PROGRESS') },
-          { onSuccess: handleSyncResult },
+          { clientId: session.id, snapshot: buildSnapshot(session, session.status) },
+          {
+            onSuccess: (result) => {
+              handleSyncResult(result);
+              // Reconectou depois de finalizar offline (ver finishSession) — o snapshot
+              // já foi enviado como COMPLETED acima, então replica a limpeza local que
+              // finishSession faria se tivesse tido rede na hora.
+              if (session.status === 'COMPLETED') {
+                setActiveSession(null);
+                queryClient.invalidateQueries({ queryKey: ['workouts'] });
+                capture('workout_logged', {
+                  exerciseCount: session.exercises.filter((e) => e.sets.length > 0).length,
+                });
+              }
+            },
+          },
         );
       }, 400),
     [syncSession],
@@ -477,6 +491,13 @@ export default function DashboardScreen() {
                 router.push('/(app)/settings');
               },
             },
+            {
+              label: 'Suporte',
+              onPress: () => {
+                setMenuOpen(false);
+                router.push('/(app)/support');
+              },
+            },
             { label: 'Sair', onPress: handleLogout },
           ].map((item) => (
             <TouchableOpacity
@@ -532,6 +553,7 @@ export default function DashboardScreen() {
       <ScrollView
         contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 40, gap: 14 }}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
         {/* ── PESO ── */}
         {view === 'weight' && weightSubView === 'log' && (

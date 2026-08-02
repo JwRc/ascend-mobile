@@ -19,7 +19,7 @@ import { ToggleCard } from '@/components/shared/ToggleCard';
 import { Field, StyledInput } from '@/components/shared/Field';
 import { StripeCardWebView, type StripeCardWebViewRef } from '@/components/shared/StripeCardWebView';
 import { round1, getApiError } from '@/lib/utils';
-import { authClient, persistToken, persistRememberMeToken } from '@/lib/auth';
+import { authClient, persistToken, refreshRememberMeToken } from '@/lib/auth';
 import { api } from '@/api/client';
 import { useAuthStore, type UserRole } from '@/store/auth.store';
 
@@ -106,18 +106,6 @@ function OnbQuestion({ children, colors, direction }: { children: React.ReactNod
       {children}
     </Text>
   );
-}
-
-const API_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
-
-async function fetchRememberMeToken() {
-  try {
-    const res = await fetch(`${API_URL}/remember-me`, { method: 'POST' });
-    if (res.ok) {
-      const { token } = await res.json();
-      if (token) await persistRememberMeToken(token);
-    }
-  } catch { }
 }
 
 export default function SignupScreen() {
@@ -236,7 +224,7 @@ export default function SignupScreen() {
       const u = (sessionData as any)?.user;
       const userRole: UserRole = role === 'coach' ? 'COACH' : 'STUDENT';
       setSession(u?.id ?? '', u?.email ?? d.email, userRole);
-      await fetchRememberMeToken();
+      await refreshRememberMeToken(true);
 
       router.replace(role === 'coach' ? '/(coach)' : '/(app)');
     } catch (e: any) {

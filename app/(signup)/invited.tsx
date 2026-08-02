@@ -17,7 +17,7 @@ import { OptRow } from '@/components/shared/OptRow';
 import { ToggleCard } from '@/components/shared/ToggleCard';
 import { Field, StyledInput } from '@/components/shared/Field';
 import { round1, getApiError } from '@/lib/utils';
-import { authClient, persistToken, persistRememberMeToken } from '@/lib/auth';
+import { authClient, persistToken, refreshRememberMeToken } from '@/lib/auth';
 import { api } from '@/api/client';
 import { useAuthStore, type UserRole } from '@/store/auth.store';
 
@@ -51,18 +51,6 @@ type FormData = {
 
 function passwordOk(p: string) {
   return p.length >= 8 && /[A-Z]/.test(p) && /[a-z]/.test(p) && /[0-9]/.test(p);
-}
-
-const API_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
-
-async function fetchRememberMeToken() {
-  try {
-    const res = await fetch(`${API_URL}/remember-me`, { method: 'POST' });
-    if (res.ok) {
-      const { token } = await res.json();
-      if (token) await persistRememberMeToken(token);
-    }
-  } catch {}
 }
 
 export default function InvitedSignupScreen() {
@@ -173,7 +161,7 @@ export default function InvitedSignupScreen() {
       const u = (sessionData as any)?.user;
       const role: UserRole = 'STUDENT';
       setSession(u?.id ?? '', u?.email ?? d.email, role);
-      await fetchRememberMeToken();
+      await refreshRememberMeToken(true);
 
       router.replace('/(app)');
     } catch (e: any) {
