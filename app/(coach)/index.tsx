@@ -5,17 +5,17 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTheme } from '@/theme';
 import { Logo } from '@/components/shared/Logo';
+import { BellIcon } from '@/components/shared/BellIcon';
 import { SegmentedControl } from '@/components/shared/SegmentedControl';
 import { CoachOverview } from '@/components/coach/CoachOverview';
 import { CoachRoster } from '@/components/coach/CoachRoster';
 import { CoachPrograms } from '@/components/coach/CoachPrograms';
 import { InviteModal } from '@/components/coach/InviteModal';
 import { useAuthStore } from '@/store/auth.store';
+import { useStrengthStore } from '@/store/strength.store';
 import { authClient } from '@/lib/auth';
 import { resetAnalytics } from '@/lib/analytics';
 import {
-  COACH_ACCOUNT,
-  billingFor,
   type CoachAthlete,
   type CoachProgram,
   type CoachStats,
@@ -61,6 +61,7 @@ function studentToAthlete(s: StudentSummary): CoachAthlete {
     onTrack: s.onTrack,
     notes: '',
     goalSetBy: 'athlete',
+    isMe: s.isMe,
   };
 }
 
@@ -87,6 +88,8 @@ function dashboardToStats(d: CoachDashboard): CoachStats {
     totalAssigned: d.adherence.totalAssigned,
     sessionPct: d.adherence.sessionPct,
     quiet: d.adherence.quiet,
+    billingTotal: d.billing.total,
+    billingExtra: d.billing.extra,
   };
 }
 
@@ -96,7 +99,8 @@ export default function CoachHomeScreen() {
   const { colors } = useTheme();
   const router = useRouter();
   const queryClient = useQueryClient();
-  const { clearSession } = useAuthStore();
+  const { clearSession, name: coachName, email: coachEmail } = useAuthStore();
+  const coachInitial = (coachName?.trim()?.[0] ?? coachEmail?.trim()?.[0] ?? '?').toUpperCase();
 
   useFocusEffect(
     React.useCallback(() => {
@@ -113,12 +117,31 @@ export default function CoachHomeScreen() {
   const [rosterFilter, setRosterFilter] = React.useState<string | undefined>(undefined);
   const [menuOpen, setMenuOpen] = React.useState(false);
 
+  // Retoma a tela dedicada de treino se o app foi reaberto com uma sessão em
+  // andamento (treino próprio do coach ou registrado em nome de um aluno) —
+  // sem isso o coach ficaria preso na home sem forma de voltar pro treino ativo.
+  const { activeSession } = useStrengthStore();
+  React.useEffect(() => {
+    if (activeSession) router.push('/(coach)/workout/active' as any);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- só no mount, resume de cold start
+  }, []);
+
   // API queries
-  const { data: dashboard, isLoading: dashLoading } = useCoachDashboard();
-  const { data: studentsRaw = [], isLoading: studentsLoading } = useStudents();
-  const { data: programsRaw = [], isLoading: programsLoading } = usePrograms();
-  const { data: notifications = [] } = useNotifications();
+  const { data: dashboard, isLoading: dashLoading, refetch: refetchDash } = useCoachDashboard();
+  const { data: studentsRaw = [], isLoading: studentsLoading, refetch: refetchStudents } = useStudents();
+  const { data: programsRaw = [], isLoading: programsLoading, refetch: refetchPrograms } = usePrograms();
+  const { data: notifications = [], refetch: refetchNotifications } = useNotifications();
   const unreadCount = notifications.length;
+
+  const [refreshing, setRefreshing] = React.useState(false);
+  async function onRefresh() {
+    setRefreshing(true);
+    try {
+      await Promise.all([refetchDash(), refetchStudents(), refetchPrograms(), refetchNotifications()]);
+    } finally {
+      setRefreshing(false);
+    }
+  }
 
   // API mutations
   const createInvite = useCreateInvite();
@@ -202,7 +225,7 @@ export default function CoachHomeScreen() {
       focus: p.focus,
       perWeek: p.perWeek,
       notes: '',
-      days: p.days.map((d, i) => ({ id: d.id, name: d.name, order: i, exercises: d.exercises })),
+      days: p.days.map((d, i) => ({ name: d.name, order: i, exercises: d.exercises })),
     });
   }
 
@@ -249,14 +272,14 @@ export default function CoachHomeScreen() {
 
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
           <Text style={{ fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 12.5, color: colors.ink3 }}>
-            R$ {billingFor(activeCount).total}/mês
+            R$ {stats?.billingTotal ?? dashboard?.billing.total ?? 0}/mês
           </Text>
           <TouchableOpacity
-            onPress={() => router.push('/(app)/notifications' as any)}
+            onPress={() => router.push('/(coach)/notifications' as any)}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
             <View style={{ position: 'relative' }}>
-              <Text style={{ fontSize: 20 }}>🔔</Text>
+              <BellIcon size={20} color={colors.ink2} />
               {unreadCount > 0 && (
                 <View
                   style={{
@@ -298,7 +321,7 @@ export default function CoachHomeScreen() {
               }}
             >
               <Text style={{ fontFamily: 'Archivo_800ExtraBold', fontSize: 13, color: colors.bg }}>
-                {COACH_ACCOUNT.coachName.slice(0, 1)}
+                {coachInitial}
               </Text>
             </View>
           </TouchableOpacity>
@@ -333,6 +356,22 @@ export default function CoachHomeScreen() {
             elevation: 8,
           }}
         >
+          <TouchableOpacity
+            onPress={() => { setMenuOpen(false); router.push('/(coach)/settings' as any); }}
+            style={{ padding: 11, borderRadius: 6 }}
+          >
+            <Text style={{ fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 14, color: colors.ink2 }}>
+              Configurações
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => { setMenuOpen(false); router.push('/(billing)' as any); }}
+            style={{ padding: 11, borderRadius: 6 }}
+          >
+            <Text style={{ fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 14, color: colors.ink2 }}>
+              Assinatura
+            </Text>
+          </TouchableOpacity>
           <TouchableOpacity
             onPress={() => { setMenuOpen(false); router.push('/(coach)/support'); }}
             style={{ padding: 11, borderRadius: 6 }}
@@ -373,6 +412,8 @@ export default function CoachHomeScreen() {
               stats={stats}
               onOpenAthlete={openAthlete}
               onGoRoster={goRoster}
+              refreshing={refreshing}
+              onRefresh={onRefresh}
             />
           )}
           {tab === 'roster' && (
@@ -381,6 +422,8 @@ export default function CoachHomeScreen() {
               initialFilter={rosterFilter as any}
               onOpenAthlete={openAthlete}
               onInvite={() => setInviteOpen(true)}
+              refreshing={refreshing}
+              onRefresh={onRefresh}
             />
           )}
           {tab === 'programs' && (
@@ -391,6 +434,8 @@ export default function CoachHomeScreen() {
               onUpdateProgram={handleUpdateProgram}
               onDeleteProgram={(id) => deleteProgramMut.mutate(id)}
               onAssignProgram={handleAssignProgram}
+              refreshing={refreshing}
+              onRefresh={onRefresh}
             />
           )}
         </View>

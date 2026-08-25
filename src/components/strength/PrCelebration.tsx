@@ -1,7 +1,11 @@
 import React from 'react';
-import { Modal, View, Text, TouchableOpacity } from 'react-native';
+import { Modal, View, Text, TouchableOpacity, Share } from 'react-native';
+import * as Sharing from 'expo-sharing';
+import type { ViewShotRef } from 'react-native-view-shot';
 import { useTheme } from '@/theme';
 import { Btn } from '@/components/shared/Btn';
+import { capture } from '@/lib/analytics';
+import { PrShareCard } from './PrShareCard';
 
 type PR = {
   exercise: string;
@@ -20,16 +24,68 @@ type Props = {
 
 export function PrCelebration({ visible, prs, unit, onClose }: Props) {
   const { colors, radius } = useTheme();
+  const shotRef = React.useRef<ViewShotRef>(null);
+  const [sharing, setSharing] = React.useState(false);
+
+  async function shareAsText() {
+    const lines = prs.map(
+      (p) => `${p.exercise}: ${p.prevBest}${unit} → ${p.e}${unit}${p.weight != null ? ` (${p.weight}${unit} × ${p.reps})` : ''}`
+    );
+    const message =
+      prs.length === 1
+        ? `Novo recorde pessoal no ASCENTIO! 🏆\n\n${lines[0]}`
+        : `${prs.length} recordes pessoais no ASCENTIO! 🏆\n\n${lines.join('\n')}`;
+    try {
+      await Share.share({ message });
+      capture('pr_shared', { count: prs.length, mode: 'text' });
+    } catch {
+      // usuário cancelou o share sheet
+    }
+  }
+
+  async function handleShare() {
+    if (sharing) return;
+    setSharing(true);
+    try {
+      const rawUri = await shotRef.current?.capture?.();
+      // no iOS o módulo às vezes devolve o path sem o esquema file:// — o
+      // expo-sharing exige a URI completa para localizar o arquivo.
+      const uri = rawUri && !rawUri.startsWith('file://') && !rawUri.startsWith('content://')
+        ? `file://${rawUri}`
+        : rawUri;
+      const canShare = uri ? await Sharing.isAvailableAsync() : false;
+      if (uri && canShare) {
+        await Sharing.shareAsync(uri, {
+          mimeType: 'image/png',
+          dialogTitle: 'Compartilhar recorde',
+          UTI: 'public.png',
+        });
+        capture('pr_shared', { count: prs.length, mode: 'image' });
+      } else {
+        await shareAsText();
+      }
+    } catch {
+      // captura/compartilhamento de imagem falhou (ex.: sem share sheet no dispositivo) — cai pro texto
+      await shareAsText();
+    } finally {
+      setSharing(false);
+    }
+  }
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      {visible && (
+        <View style={{ position: 'absolute', top: -9999, left: -9999, opacity: 0 }} pointerEvents="none">
+          <PrShareCard ref={shotRef} prs={prs} unit={unit} />
+        </View>
+      )}
       <TouchableOpacity
         activeOpacity={1}
         onPress={onClose}
         style={{
           flex: 1,
           backgroundColor: 'rgba(0,0,0,0.5)',
-          justifyContent: 'flex-end',
+          justifyContent: 'center',
           padding: 16,
         }}
       >
@@ -134,7 +190,10 @@ export function PrCelebration({ visible, prs, unit, onClose }: Props) {
             </View>
 
             {/* action */}
-            <View style={{ paddingHorizontal: 24, paddingBottom: 24 }}>
+            <View style={{ paddingHorizontal: 24, paddingBottom: 24, gap: 10 }}>
+              <Btn kind="ghost" full onPress={handleShare} loading={sharing} disabled={sharing}>
+                Compartilhar ↗
+              </Btn>
               <Btn kind="primary" full onPress={onClose}>
                 Ver progresso →
               </Btn>

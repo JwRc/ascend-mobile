@@ -6,6 +6,7 @@ import {
   TextInput,
   TouchableOpacity,
   FlatList,
+  RefreshControl,
 } from 'react-native';
 import { useTheme } from '@/theme';
 import { semanticColors } from '@/theme';
@@ -552,6 +553,8 @@ type Props = {
   onUpdateProgram: (p: CoachProgram) => void;
   onDeleteProgram: (id: string) => void;
   onAssignProgram: (athleteId: string, programId: string | null) => void;
+  refreshing?: boolean;
+  onRefresh?: () => void;
 };
 
 export function CoachPrograms({
@@ -561,6 +564,8 @@ export function CoachPrograms({
   onUpdateProgram,
   onDeleteProgram,
   onAssignProgram,
+  refreshing,
+  onRefresh,
 }: Props) {
   const { colors } = useTheme();
   const [builderOpen, setBuilderOpen] = React.useState(false);
@@ -590,6 +595,11 @@ export function CoachPrograms({
     <ScrollView
       contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 40, gap: 14 }}
       showsVerticalScrollIndicator={false}
+      refreshControl={
+        onRefresh ? (
+          <RefreshControl refreshing={!!refreshing} onRefresh={onRefresh} tintColor={colors.ink3} />
+        ) : undefined
+      }
     >
       {/* header */}
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: 4 }}>

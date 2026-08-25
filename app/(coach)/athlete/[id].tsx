@@ -5,7 +5,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useTheme } from '@/theme';
 import { AthleteDetail } from '@/components/coach/AthleteDetail';
 import { StudentOwnSection } from '@/components/coach/StudentOwnSection';
-import { useStudentById, useUpdateStudentGoal, useAssignStudentProgram, useUpdateStudentNotes } from '@/api/hooks/useStudents';
+import { useStudentById, useUpdateStudentGoal, useAssignStudentProgram, useUpdateStudentNotes, useRemoveStudent } from '@/api/hooks/useStudents';
 import { usePrograms } from '@/api/hooks/usePrograms';
 import { useInvites, useRevokeInvite, useResendInvite } from '@/api/hooks/useInvites';
 import type { CoachAthlete, CoachProgram, Flag } from '@/store/coach.store';
@@ -34,6 +34,7 @@ function studentToAthlete(s: StudentSummary): CoachAthlete {
     onTrack: s.onTrack,
     notes: s.notes ?? '',
     goalSetBy: 'athlete',
+    isMe: s.isMe,
   };
 }
 
@@ -61,6 +62,7 @@ export default function AthleteDetailScreen() {
   const updateStudentNotes = useUpdateStudentNotes();
   const revokeInvite = useRevokeInvite();
   const resendInvite = useResendInvite();
+  const removeStudent = useRemoveStudent();
 
   const athlete = React.useMemo(
     () => studentRaw ? studentToAthlete(studentRaw) : null,
@@ -94,6 +96,12 @@ export default function AthleteDetailScreen() {
   function handleResendInvite(_athleteId: string) {
     const inviteId = findInviteId();
     if (inviteId) resendInvite.mutate(inviteId);
+  }
+
+  function handleRemoveStudent(athleteId: string) {
+    removeStudent.mutate(athleteId, {
+      onSuccess: () => (router.canGoBack() ? router.back() : router.replace('/(coach)')),
+    });
   }
 
   if (studentLoading) {
@@ -166,7 +174,20 @@ export default function AthleteDetailScreen() {
         onUpdateNotes={(athleteId, notes) => updateStudentNotes.mutate({ athleteId, notes })}
         onResendInvite={handleResendInvite}
         onCancelInvite={handleCancelInvite}
-        extraContent={studentRaw?.isMe ? <StudentOwnSection units={athlete.units} /> : undefined}
+        onRemoveStudent={handleRemoveStudent}
+        isMe={!!studentRaw?.isMe}
+        extraContent={
+          studentRaw?.isMe ? (
+            <StudentOwnSection
+              units={athlete.units}
+              athlete={athlete}
+              programs={programs}
+              onAssignProgram={handleAssignProgram}
+              onUpdateGoal={handleUpdateGoal}
+              onUpdateNotes={(athleteId, notes) => updateStudentNotes.mutate({ athleteId, notes })}
+            />
+          ) : undefined
+        }
       />
     </SafeAreaView>
   );

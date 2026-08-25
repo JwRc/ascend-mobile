@@ -4,8 +4,16 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { useTheme } from '@/theme';
 import { Card } from '@/components/shared/Card';
+import { SegmentedControl } from '@/components/shared/SegmentedControl';
 import { useStudentProfile, useUpdateStudentProfile } from '@/api/hooks/useStudentProfile';
 import { authClient } from '@/lib/auth';
+import { useUIStore, type ColorScheme } from '@/store/ui.store';
+
+const APPEARANCE_OPTIONS: { value: ColorScheme; label: string }[] = [
+  { value: 'system', label: 'Sistema' },
+  { value: 'light', label: 'Claro' },
+  { value: 'dark', label: 'Escuro' },
+];
 
 const ACTIVITY_OPTIONS: { value: 'sed' | 'light' | 'mod' | 'high'; label: string }[] = [
   { value: 'sed', label: 'Sedentário' },
@@ -18,6 +26,7 @@ export default function SettingsScreen() {
   const { colors, direction } = useTheme();
   const { data: profile } = useStudentProfile();
   const updateProfile = useUpdateStudentProfile();
+  const { colorScheme, setColorScheme } = useUIStore();
 
   const u = profile?.units ?? 'kg';
 
@@ -102,6 +111,15 @@ export default function SettingsScreen() {
         contentContainerStyle={{ paddingHorizontal: 20, paddingVertical: 20, gap: 16 }}
         showsVerticalScrollIndicator={false}
       >
+        {/* ── Aparência ─────────────────────────────────────────────── */}
+        <Card style={{ gap: 14 }}>
+          <View style={{ gap: 4 }}>
+            <Text style={labelStyle}>Aparência</Text>
+            <Text style={descStyle}>Tema claro, escuro ou de acordo com o sistema do aparelho.</Text>
+          </View>
+          <SegmentedControl options={APPEARANCE_OPTIONS} value={colorScheme} onChange={(v) => setColorScheme(v as ColorScheme)} />
+        </Card>
+
         {/* ── Unidade de peso ───────────────────────────────────────── */}
         <Card style={{ gap: 14 }}>
           <View style={{ gap: 4 }}>

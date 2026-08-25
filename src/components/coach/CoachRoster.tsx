@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   FlatList,
   ScrollView,
+  RefreshControl,
 } from 'react-native';
 import { useTheme } from '@/theme';
 import { semanticColors } from '@/theme';
@@ -35,7 +36,7 @@ function RosterRow({ a, onPress }: { a: CoachAthlete; onPress: () => void }) {
   const losing = a.goalDir === 'lose';
   const deltaGood = a.goalDir === 'maintain' ? null : losing ? a.weekDelta < 0 : a.weekDelta > 0;
   const deltaColor =
-    deltaGood == null ? colors.ink3 : deltaGood ? semanticColors.success : semanticColors.danger;
+    a.isMe || deltaGood == null ? colors.ink3 : deltaGood ? semanticColors.success : semanticColors.danger;
   const arrow = a.weekDelta === 0 ? '—' : a.weekDelta < 0 ? '▾' : '▴';
 
   return (
@@ -49,6 +50,7 @@ function RosterRow({ a, onPress }: { a: CoachAthlete; onPress: () => void }) {
         paddingHorizontal: 16,
         borderBottomWidth: 1.5,
         borderBottomColor: colors.line,
+        backgroundColor: a.isMe ? `${colors.accent}0d` : undefined,
         gap: 10,
       }}
     >
@@ -73,20 +75,43 @@ function RosterRow({ a, onPress }: { a: CoachAthlete; onPress: () => void }) {
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
             <Text
               numberOfLines={1}
-              style={{ fontFamily: 'HankenGrotesk_700Bold', fontSize: 14, color: colors.ink, flex: 1 }}
+              style={{ fontFamily: 'HankenGrotesk_700Bold', fontSize: 14, color: colors.ink, flexShrink: 1 }}
             >
               {a.name}
             </Text>
-            {a.flags.length > 0 && (
+            {a.isMe ? (
               <View
                 style={{
-                  width: 8,
-                  height: 8,
-                  borderRadius: 4,
-                  backgroundColor: semanticColors.danger,
-                  flexShrink: 0,
+                  backgroundColor: colors.accent,
+                  borderRadius: 30,
+                  paddingHorizontal: 7,
+                  paddingVertical: 2,
                 }}
-              />
+              >
+                <Text
+                  style={{
+                    fontFamily: 'HankenGrotesk_800ExtraBold',
+                    fontSize: 10,
+                    letterSpacing: 0.7,
+                    textTransform: 'uppercase',
+                    color: '#fff',
+                  }}
+                >
+                  Eu
+                </Text>
+              </View>
+            ) : (
+              a.flags.length > 0 && (
+                <View
+                  style={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: 4,
+                    backgroundColor: semanticColors.danger,
+                    flexShrink: 0,
+                  }}
+                />
+              )
             )}
           </View>
           <Text
@@ -205,9 +230,11 @@ type Props = {
   initialFilter?: Filter;
   onOpenAthlete: (a: CoachAthlete) => void;
   onInvite: () => void;
+  refreshing?: boolean;
+  onRefresh?: () => void;
 };
 
-export function CoachRoster({ athletes, initialFilter, onOpenAthlete, onInvite }: Props) {
+export function CoachRoster({ athletes, initialFilter, onOpenAthlete, onInvite, refreshing, onRefresh }: Props) {
   const { colors, radius } = useTheme();
   const [q, setQ] = React.useState('');
   const [filter, setFilter] = React.useState<Filter>(initialFilter ?? 'all');
@@ -223,6 +250,7 @@ export function CoachRoster({ athletes, initialFilter, onOpenAthlete, onInvite }
   const rows = React.useMemo(() => {
     const needle = q.trim().toLowerCase();
     let r = athletes.filter((a) => {
+      if (a.isMe) return filter === 'all';
       if (filter === 'attention') return a.status === 'active' && a.flags.length > 0;
       if (filter === 'ontrack') return a.onTrack;
       if (filter === 'inactive') return a.status === 'active' && a.daysSinceLog != null && a.daysSinceLog >= STALE_DAYS;
@@ -363,6 +391,11 @@ export function CoachRoster({ athletes, initialFilter, onOpenAthlete, onInvite }
         renderItem={({ item }) => (
           <RosterRow a={item} onPress={() => onOpenAthlete(item)} />
         )}
+        refreshControl={
+          onRefresh ? (
+            <RefreshControl refreshing={!!refreshing} onRefresh={onRefresh} tintColor={colors.ink3} />
+          ) : undefined
+        }
         ListEmptyComponent={
           <View style={{ padding: 40, alignItems: 'center' }}>
             <Text style={{ fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 14, color: colors.ink3 }}>

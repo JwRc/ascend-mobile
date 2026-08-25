@@ -10,6 +10,7 @@ import { useTheme } from '@/theme';
 import { Card } from '@/components/shared/Card';
 import { Btn } from '@/components/shared/Btn';
 import { AppModal } from '@/components/shared/AppModal';
+import { PlayIcon, PauseIcon } from '@/components/shared/PlayPauseIcon';
 import { ExerciseBlock } from './ExerciseBlock';
 import {
   ActiveSession as ActiveSessionType,
@@ -157,9 +158,11 @@ export function ActiveSession({ active, sessions, unit, onUpdateActive, onFinish
                 justifyContent: 'center',
               }}
             >
-              <Text style={{ fontSize: 22, color: running ? colors.ink2 : '#fff' }}>
-                {running ? '⏸' : '▶'}
-              </Text>
+              {running ? (
+                <PauseIcon size={20} color={colors.ink2} />
+              ) : (
+                <PlayIcon size={20} color="#fff" />
+              )}
             </TouchableOpacity>
 
             <View>

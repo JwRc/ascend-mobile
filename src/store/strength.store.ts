@@ -52,12 +52,26 @@ export type ActiveSession = {
   // 'COMPLETED' marca que o usuário já tocou em Finalizar — a sessão fica persistida
   // até o checkpoint final ter sucesso, mesmo offline (ver finishSession em index.tsx)
   status: 'IN_PROGRESS' | 'COMPLETED';
+  // presente quando o coach está registrando a sessão em nome de um aluno — direciona
+  // o sync/discard para as rotas for-student em vez das rotas da própria sessão.
+  // Carrega os dados que a tela dedicada de treino precisa e não teria de outra forma,
+  // já que ela só lê o estado global (nenhum param de rota é passado).
+  forStudent?: { id: string; name: string; units: 'kg' | 'lb' } | null;
+};
+
+export type PrCelebrationData = {
+  prs: { exercise: string; e: number; prevBest: number; weight: number | null; reps: number | null }[];
+  unit: 'kg' | 'lb';
 };
 
 type StrengthState = {
   templates: Template[];
   sessions: Session[];
   activeSession: ActiveSession | null;
+  // PRs batidos ao finalizar um treino — setado pela tela dedicada de treino antes de
+  // navegar de volta pra lista, e consumido/exibido por um único modal global montado
+  // no root layout, já que a tela que disparou o PR não existe mais depois do back.
+  pendingCelebration: PrCelebrationData | null;
 
   setTemplates: (t: Template[]) => void;
   addTemplate: (t: Template) => void;
@@ -70,6 +84,7 @@ type StrengthState = {
 
   setActiveSession: (s: ActiveSession | null) => void;
   updateActiveSession: (fn: (prev: ActiveSession) => ActiveSession) => void;
+  setPendingCelebration: (c: PrCelebrationData | null) => void;
 };
 
 export function uid(prefix: string) {
@@ -140,6 +155,7 @@ export const useStrengthStore = create<StrengthState>()(
       templates: seedTemplates(),
       sessions: [],
       activeSession: null,
+      pendingCelebration: null,
 
       setTemplates: (templates) => set({ templates }),
       addTemplate: (t) => set((s) => ({ templates: [...s.templates, t] })),
@@ -157,6 +173,7 @@ export const useStrengthStore = create<StrengthState>()(
       setActiveSession: (activeSession) => set({ activeSession }),
       updateActiveSession: (fn) =>
         set((s) => (s.activeSession ? { activeSession: fn(s.activeSession) } : {})),
+      setPendingCelebration: (pendingCelebration) => set({ pendingCelebration }),
     }),
     {
       name: 'ascentio-active-session',

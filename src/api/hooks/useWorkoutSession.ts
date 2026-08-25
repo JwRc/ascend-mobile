@@ -8,11 +8,16 @@ export function useSyncWorkoutSession() {
     mutationFn: async ({
       clientId,
       snapshot,
+      studentId,
     }: {
       clientId: string;
       snapshot: WorkoutSessionSnapshot;
+      studentId?: string;
     }) => {
-      const res = await api.put<WorkoutSessionSyncResult>(`/workouts/session/${clientId}`, snapshot);
+      const url = studentId
+        ? `/workouts/session/for-student/${studentId}/${clientId}`
+        : `/workouts/session/${clientId}`;
+      const res = await api.put<WorkoutSessionSyncResult>(url, snapshot);
       return res.data;
     },
     onSuccess: (data) => {
@@ -23,8 +28,11 @@ export function useSyncWorkoutSession() {
 
 export function useDiscardWorkoutSession() {
   return useMutation({
-    mutationFn: async (clientId: string) => {
-      await api.delete(`/workouts/session/${clientId}`);
+    mutationFn: async ({ clientId, studentId }: { clientId: string; studentId?: string }) => {
+      const url = studentId
+        ? `/workouts/session/for-student/${studentId}/${clientId}`
+        : `/workouts/session/${clientId}`;
+      await api.delete(url);
     },
   });
 }

@@ -68,7 +68,7 @@ export default function LoginScreen() {
       if (token) await persistToken(token);
       const user = (data as any).user;
       const role: UserRole = user?.role === 'COACH' ? 'COACH' : 'STUDENT';
-      setSession(user?.id ?? '', user?.email ?? email, role, { tenantId: user?.tenantId ?? null });
+      setSession(user?.id ?? '', user?.email ?? email, role, { name: user?.name ?? null, tenantId: user?.tenantId ?? null });
       identify(user?.id ?? '', role.toLowerCase());
       await refreshRememberMeToken(true);
       router.replace(role === 'COACH' ? '/(coach)' : '/(app)');
@@ -95,7 +95,7 @@ export default function LoginScreen() {
     const { data } = await authClient.getSession();
     const user = (data as any)?.user;
     const role: UserRole = user?.role === 'COACH' ? 'COACH' : 'STUDENT';
-    setSession(user?.id ?? '', user?.email ?? '', role);
+    setSession(user?.id ?? '', user?.email ?? '', role, { name: user?.name ?? null, tenantId: user?.tenantId ?? null });
     identify(user?.id ?? '', role.toLowerCase());
     await refreshRememberMeToken(true);
     router.replace(role === 'COACH' ? '/(coach)' : '/(app)');

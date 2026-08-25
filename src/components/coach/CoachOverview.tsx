@@ -1,48 +1,16 @@
 import React from 'react';
-import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, RefreshControl } from 'react-native';
 import { useTheme } from '@/theme';
 import { semanticColors } from '@/theme';
 import { Card } from '@/components/shared/Card';
 import { FlagBadge } from './FlagBadge';
 import {
-  COACH_ACCOUNT,
   STALE_DAYS,
-  billingFor,
   type CoachAthlete,
   type CoachStats,
 } from '@/store/coach.store';
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
-
-function BillingStrip({ activeCount }: { activeCount: number }) {
-  const { colors } = useTheme();
-  const billing = billingFor(activeCount);
-  return (
-    <View
-      style={{
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        paddingHorizontal: 20,
-        paddingVertical: 10,
-        borderBottomWidth: 1.5,
-        borderBottomColor: colors.line,
-      }}
-    >
-      <Text style={{ fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 13, color: colors.ink2 }}>
-        <Text style={{ fontFamily: 'HankenGrotesk_700Bold', color: colors.ink }}>{activeCount}</Text>
-        {' '}atletas ativos
-      </Text>
-      <Text style={{ fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 13, color: colors.ink2 }}>
-        R$ {COACH_ACCOUNT.basePrice}
-        {billing.extra > 0 && ` + ${billing.extra}×R$${COACH_ACCOUNT.pricePerExtra}`}
-        <Text style={{ fontFamily: 'HankenGrotesk_700Bold', color: colors.ink }}>
-          {' '}= R$ {billing.total}/mês
-        </Text>
-      </Text>
-    </View>
-  );
-}
 
 function StatCard({
   label,
@@ -175,9 +143,11 @@ type Props = {
   stats: CoachStats;
   onOpenAthlete: (a: CoachAthlete) => void;
   onGoRoster: (filter?: string) => void;
+  refreshing?: boolean;
+  onRefresh?: () => void;
 };
 
-export function CoachOverview({ stats, onOpenAthlete, onGoRoster }: Props) {
+export function CoachOverview({ stats, onOpenAthlete, onGoRoster, refreshing, onRefresh }: Props) {
   const { colors } = useTheme();
   const topFlags = stats.flagged.slice(0, 7);
   const rest = Math.max(0, stats.flaggedCount - topFlags.length);
@@ -191,6 +161,11 @@ export function CoachOverview({ stats, onOpenAthlete, onGoRoster }: Props) {
     <ScrollView
       contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 40, gap: 14 }}
       showsVerticalScrollIndicator={false}
+      refreshControl={
+        onRefresh ? (
+          <RefreshControl refreshing={!!refreshing} onRefresh={onRefresh} tintColor={colors.ink3} />
+        ) : undefined
+      }
     >
       {/* RED FLAGS — hero */}
       <Card style={{ gap: 0, padding: 0, overflow: 'hidden' }}>

@@ -69,6 +69,7 @@ export function useRemoveStudent() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['students'] });
+      qc.invalidateQueries({ queryKey: ['dashboard', 'coach'] });
     },
   });
 }

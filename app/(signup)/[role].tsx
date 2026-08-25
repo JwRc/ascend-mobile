@@ -13,15 +13,24 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useConfirmSetupIntent } from '@stripe/stripe-react-native';
 import { useTheme } from '@/theme';
 import { Btn } from '@/components/shared/Btn';
-import { Stepper } from '@/components/shared/Stepper';
-import { OptRow } from '@/components/shared/OptRow';
-import { ToggleCard } from '@/components/shared/ToggleCard';
 import { Field, StyledInput } from '@/components/shared/Field';
 import { StripeCardWebView, type StripeCardWebViewRef } from '@/components/shared/StripeCardWebView';
+import { CreditCardVisual } from '@/components/shared/CreditCardVisual';
 import { round1, getApiError } from '@/lib/utils';
 import { authClient, persistToken, refreshRememberMeToken } from '@/lib/auth';
 import { api } from '@/api/client';
 import { useAuthStore, type UserRole } from '@/store/auth.store';
+import { OnboardingHeader, StepEyebrow, StepQuestion } from '@/components/onboarding/OnboardingChrome';
+import {
+  CurrentWeightStep,
+  GoalTypeStep,
+  HeightStep,
+  GoalWeightStep,
+  ActivityStep,
+  RemindersStep,
+  type GoalType,
+  type ActivityLevel,
+} from '@/components/onboarding/ProfileSteps';
 
 type Role = 'coach' | 'standalone';
 
@@ -30,29 +39,16 @@ const STEPS_BY_ROLE: Record<Role, readonly string[]> = {
   standalone: ['account', 'current', 'goaltype', 'height', 'goal', 'activity', 'reminders', 'checkout'],
 };
 
-const GOAL_TYPES = [
-  { value: 'lose',     label: 'Perder peso',  note: 'Chegar a um peso alvo' },
-  { value: 'strength', label: 'Ganhar força',  note: 'Evoluir nos treinos' },
-  { value: 'maintain', label: 'Manter',        note: 'Manter consistência' },
-] as const;
-
-const ACTIVITY = [
-  { value: 'sed',   label: 'Sedentário', note: 'Trabalho de mesa, pouco exercício' },
-  { value: 'light', label: 'Leve',       note: '1–3 treinos por semana' },
-  { value: 'mod',   label: 'Ativo',      note: '4–5 treinos por semana' },
-  { value: 'high',  label: 'Atleta',     note: 'Treino diário' },
-] as const;
-
 type FormData = {
   name: string;
   email: string;
   phone: string;
   password: string;
   current: number;
-  goalType: 'lose' | 'strength' | 'maintain';
+  goalType: GoalType;
   heightCm: number;
   goal: number;
-  activity: 'sed' | 'light' | 'mod' | 'high';
+  activity: ActivityLevel;
   reminders: boolean;
   billingPeriod: 'monthly' | 'annual';
   cardholderName: string;
@@ -91,28 +87,11 @@ function passwordOk(p: string) {
   return p.length >= 8 && /[A-Z]/.test(p) && /[a-z]/.test(p) && /[0-9]/.test(p);
 }
 
-function StepLabel({ children }: { children: React.ReactNode }) {
-  const { colors } = useTheme();
-  return (
-    <Text style={{ fontFamily: 'HankenGrotesk_700Bold', fontSize: 11.5, letterSpacing: 2, textTransform: 'uppercase', color: colors.ink3 }}>
-      {children}
-    </Text>
-  );
-}
-
-function OnbQuestion({ children, colors, direction }: { children: React.ReactNode; colors: any; direction: string }) {
-  return (
-    <Text style={{ fontFamily: 'Archivo_900Black', fontSize: 36, lineHeight: 38, letterSpacing: direction === 'A' ? -0.5 : -1.5, textTransform: direction === 'A' ? 'uppercase' : 'none', color: colors.ink }}>
-      {children}
-    </Text>
-  );
-}
-
 export default function SignupScreen() {
   const { role: rawRole } = useLocalSearchParams<{ role: string }>();
   const role: Role = rawRole === 'coach' ? 'coach' : 'standalone';
 
-  const { colors, direction, radius } = useTheme();
+  const { colors, radius } = useTheme();
   const { setSession } = useAuthStore();
   const { confirmSetupIntent } = useConfirmSetupIntent();
   const cardWebViewRef = React.useRef<StripeCardWebViewRef>(null);
@@ -122,6 +101,8 @@ export default function SignupScreen() {
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState('');
   const [cardReady, setCardReady] = React.useState(false);
+  const [cardBrand, setCardBrand] = React.useState('unknown');
+  const [cvvFocused, setCvvFocused] = React.useState(false);
 
   const [d, setD] = React.useState<FormData>({
     name: '',
@@ -223,7 +204,7 @@ export default function SignupScreen() {
       const { data: sessionData } = await authClient.getSession();
       const u = (sessionData as any)?.user;
       const userRole: UserRole = role === 'coach' ? 'COACH' : 'STUDENT';
-      setSession(u?.id ?? '', u?.email ?? d.email, userRole);
+      setSession(u?.id ?? '', u?.email ?? d.email, userRole, { name: u?.name ?? d.name ?? null });
       await refreshRememberMeToken(true);
 
       router.replace(role === 'coach' ? '/(coach)' : '/(app)');
@@ -233,14 +214,6 @@ export default function SignupScreen() {
       setLoading(false);
     }
   }
-
-  const diff = round1(Math.abs(d.current - d.goal));
-  const goalDir = d.goal < d.current ? 'perder' : d.goal > d.current ? 'ganhar' : 'manter';
-
-  const cmToFtIn = (cm: number) => {
-    const inch = cm / 2.54;
-    return { ft: Math.floor(inch / 12), inch: Math.round(inch % 12) };
-  };
 
   const isNextDisabled =
     (key === 'account' && (!d.name.trim() || !d.email.trim() || !d.password)) ||
@@ -264,24 +237,8 @@ export default function SignupScreen() {
             paddingBottom: 28,
           }}
         >
-          {/* header */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, paddingBottom: 8 }}>
-            <TouchableOpacity onPress={back} style={{ paddingVertical: 6 }}>
-              <Text style={{ fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 14.5, color: colors.ink2 }}>
-                ← Voltar
-              </Text>
-            </TouchableOpacity>
-            <View style={{ flex: 1, flexDirection: 'row', gap: 5 }}>
-              {STEPS.map((_, i) => (
-                <View key={i} style={{ flex: 1, height: 4, borderRadius: 4, backgroundColor: i <= step ? colors.accent : colors.line2 }} />
-              ))}
-            </View>
-            <Text style={{ fontFamily: 'HankenGrotesk_700Bold', fontSize: 12, letterSpacing: 0.6, color: colors.ink3 }}>
-              {step + 1}/{total}
-            </Text>
-          </View>
+          <OnboardingHeader step={step} total={total} onBack={back} />
 
-          {/* body */}
           <ScrollView
             style={{ flex: 1 }}
             contentContainerStyle={{ paddingVertical: 20, gap: 22 }}
@@ -289,257 +246,180 @@ export default function SignupScreen() {
             showsVerticalScrollIndicator={false}
           >
             <Animated.View key={step} entering={FadeInDown.duration(280).springify()} style={{ gap: 22 }}>
-
-              {key === 'account'   && <StepLabel>Sua conta</StepLabel>}
-              {key === 'current'   && <StepLabel>Onde você está agora</StepLabel>}
-              {key === 'goaltype'  && <StepLabel>Seu objetivo principal</StepLabel>}
-              {key === 'height'    && <StepLabel>Um pouco sobre você</StepLabel>}
-              {key === 'goal'      && <StepLabel>Sua meta</StepLabel>}
-              {key === 'activity'  && <StepLabel>Seu nível de atividade</StepLabel>}
-              {key === 'reminders' && <StepLabel>Consistência</StepLabel>}
-              {key === 'checkout'  && <StepLabel>30 dias grátis</StepLabel>}
-
-              <OnbQuestion direction={direction} colors={colors}>
-                {key === 'account'   && 'Crie\nsua conta'}
-                {key === 'current'   && 'Seu peso\natual'}
-                {key === 'goaltype'  && 'Para o que\nvocê treina?'}
-                {key === 'height'    && 'Qual é\nsua altura?'}
-                {key === 'goal'      && 'Sua meta\nde peso'}
-                {key === 'activity'  && 'Seu nível\nde atividade'}
-                {key === 'reminders' && 'Lembrete\ndiário'}
-                {key === 'checkout'  && 'Configure\nseu plano'}
-              </OnbQuestion>
-
               {key === 'account' && (
-                <View style={{ gap: 14 }}>
-                  <Field label="Nome completo">
-                    <StyledInput
-                      value={d.name}
-                      onChangeText={(t) => { set('name', t); setError(''); }}
-                      placeholder="Seu nome"
-                      autoCapitalize="words"
-                      autoComplete="name"
-                    />
-                  </Field>
-                  <Field label="E-mail">
-                    <StyledInput
-                      value={d.email}
-                      onChangeText={(t) => { set('email', t); setError(''); }}
-                      placeholder="voce@email.com"
-                      keyboardType="email-address"
-                      autoCapitalize="none"
-                      autoComplete="email"
-                    />
-                  </Field>
-                  <Field label="Telefone (opcional)">
-                    <StyledInput
-                      value={d.phone}
-                      onChangeText={(t) => set('phone', formatPhone(t))}
-                      placeholder="(11) 91234-5678"
-                      keyboardType="phone-pad"
-                    />
-                  </Field>
-                  <Field label="Senha">
-                    <StyledInput
-                      value={d.password}
-                      onChangeText={(t) => { set('password', t); setError(''); }}
-                      placeholder="••••••••"
-                      secureTextEntry
-                    />
-                  </Field>
-                  {d.password.length > 0 && (
-                    <View style={{ gap: 4 }}>
-                      {[
-                        { ok: d.password.length >= 8,      label: '8 ou mais caracteres' },
-                        { ok: /[A-Z]/.test(d.password),    label: 'Uma letra maiúscula' },
-                        { ok: /[a-z]/.test(d.password),    label: 'Uma letra minúscula' },
-                        { ok: /[0-9]/.test(d.password),    label: 'Um número' },
-                      ].map((rule) => (
-                        <Text
-                          key={rule.label}
-                          style={{
-                            fontFamily: 'HankenGrotesk_600SemiBold',
-                            fontSize: 12.5,
-                            color: rule.ok ? colors.accent : colors.ink3,
-                          }}
-                        >
-                          {rule.ok ? '✓' : '○'} {rule.label}
-                        </Text>
-                      ))}
-                    </View>
-                  )}
-                </View>
-              )}
-
-              {key === 'current' && (
-                <Stepper
-                  value={d.current}
-                  onChange={(v) => set('current', v)}
-                  min={30}
-                  max={250}
-                  step={0.5}
-                  unit="kg"
-                />
-              )}
-
-              {key === 'goaltype' && (
-                <View style={{ gap: 10 }}>
-                  {GOAL_TYPES.map((g) => (
-                    <OptRow
-                      key={g.value}
-                      label={g.label}
-                      note={g.note}
-                      selected={d.goalType === g.value}
-                      onPress={() => set('goalType', g.value)}
-                    />
-                  ))}
-                </View>
-              )}
-
-              {key === 'height' && (
-                <View style={{ gap: 14 }}>
-                  <Stepper
-                    value={d.heightCm}
-                    onChange={(v) => set('heightCm', v)}
-                    min={120}
-                    max={230}
-                    step={1}
-                    unit="cm"
-                  />
-                  <Text style={{ fontFamily: 'HankenGrotesk_400Regular', fontSize: 13.5, color: colors.ink3, textAlign: 'center' }}>
-                    {(() => { const { ft, inch } = cmToFtIn(d.heightCm); return `${ft}'${inch}"`; })()}
-                  </Text>
-                </View>
-              )}
-
-              {key === 'goal' && (
-                <View style={{ gap: 14 }}>
-                  <Stepper
-                    value={d.goal}
-                    onChange={(v) => set('goal', v)}
-                    min={30}
-                    max={250}
-                    step={0.5}
-                    unit="kg"
-                  />
-                  {d.goalType !== 'strength' && (
-                    <Text style={{ fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 14, color: colors.ink2, textAlign: 'center' }}>
-                      {diff} kg para {goalDir}
-                    </Text>
-                  )}
-                </View>
-              )}
-
-              {key === 'activity' && (
-                <View style={{ gap: 10 }}>
-                  {ACTIVITY.map((a) => (
-                    <OptRow
-                      key={a.value}
-                      label={a.label}
-                      note={a.note}
-                      selected={d.activity === a.value}
-                      onPress={() => set('activity', a.value)}
-                    />
-                  ))}
-                </View>
-              )}
-
-              {key === 'reminders' && (
-                <ToggleCard
-                  label="Lembrete diário de peso"
-                  note="Receba uma notificação para registrar seu peso"
-                  value={d.reminders}
-                  onChange={(v) => set('reminders', v)}
-                />
-              )}
-
-              {key === 'checkout' && (
-                <View style={{ gap: 20 }}>
-                  <View
-                    style={{
-                      backgroundColor: colors.accent + '18',
-                      borderRadius: radius.card / 2,
-                      padding: 14,
-                      flexDirection: 'row',
-                      gap: 10,
-                      alignItems: 'center',
-                    }}
-                  >
-                    <Text style={{ fontFamily: 'HankenGrotesk_700Bold', fontSize: 20 }}>🎁</Text>
-                    <View style={{ flex: 1 }}>
-                      <Text style={{ fontFamily: 'HankenGrotesk_700Bold', fontSize: 14, color: colors.accent }}>
-                        30 dias grátis
-                      </Text>
-                      <Text style={{ fontFamily: 'HankenGrotesk_400Regular', fontSize: 13, color: colors.ink2 }}>
-                        Primeira cobrança em {trialEndStr}
-                      </Text>
-                    </View>
-                  </View>
-
-                  <View style={{ gap: 8 }}>
-                    <Text style={{ fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 13, color: colors.ink3 }}>
-                      Período de cobrança
-                    </Text>
-                    <View style={{ flexDirection: 'row', gap: 10 }}>
-                      {(['monthly', 'annual'] as const).map((p) => (
-                        <TouchableOpacity
-                          key={p}
-                          onPress={() => set('billingPeriod', p)}
-                          style={{
-                            flex: 1,
-                            paddingVertical: 12,
-                            borderRadius: radius.card / 2,
-                            borderWidth: 1.5,
-                            borderColor: d.billingPeriod === p ? colors.accent : colors.line,
-                            backgroundColor: d.billingPeriod === p ? colors.accent + '12' : colors.surface,
-                            alignItems: 'center',
-                            gap: 2,
-                          }}
-                        >
-                          <Text style={{ fontFamily: 'HankenGrotesk_700Bold', fontSize: 14, color: d.billingPeriod === p ? colors.accent : colors.ink }}>
-                            {p === 'monthly' ? 'Mensal' : 'Anual'}
-                          </Text>
-                          {p === 'annual' && (
-                            <Text style={{ fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 11, color: colors.accent }}>
-                              20% de desconto
-                            </Text>
-                          )}
-                        </TouchableOpacity>
-                      ))}
-                    </View>
-                  </View>
-
+                <>
+                  <StepEyebrow>Sua conta</StepEyebrow>
+                  <StepQuestion>{'Crie\nsua conta'}</StepQuestion>
                   <View style={{ gap: 14 }}>
-                    <StripeCardWebView
-                      ref={cardWebViewRef}
-                      publishableKey={process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? ''}
-                      colors={colors}
-                      radiusSm={radius.cardSm}
-                      onComplete={setCardReady}
-                    />
-                    <Field label="Nome no cartão">
+                    <Field label="Nome completo">
                       <StyledInput
-                        value={d.cardholderName}
-                        onChangeText={(t) => { set('cardholderName', t); setError(''); }}
-                        placeholder="Como aparece no cartão"
-                        autoCapitalize="characters"
+                        value={d.name}
+                        onChangeText={(t) => { set('name', t); setError(''); }}
+                        placeholder="Seu nome"
+                        autoCapitalize="words"
                         autoComplete="name"
                       />
                     </Field>
-                    <Field label="CPF">
+                    <Field label="E-mail">
                       <StyledInput
-                        value={d.cpf}
-                        onChangeText={(t) => set('cpf', formatCpf(t))}
-                        placeholder="000.000.000-00"
-                        keyboardType="numeric"
+                        value={d.email}
+                        onChangeText={(t) => { set('email', t); setError(''); }}
+                        placeholder="voce@email.com"
+                        keyboardType="email-address"
+                        autoCapitalize="none"
+                        autoComplete="email"
                       />
                     </Field>
+                    <Field label="Telefone (opcional)">
+                      <StyledInput
+                        value={d.phone}
+                        onChangeText={(t) => set('phone', formatPhone(t))}
+                        placeholder="(11) 91234-5678"
+                        keyboardType="phone-pad"
+                      />
+                    </Field>
+                    <Field label="Senha">
+                      <StyledInput
+                        value={d.password}
+                        onChangeText={(t) => { set('password', t); setError(''); }}
+                        placeholder="••••••••"
+                        secureTextEntry
+                      />
+                    </Field>
+                    {d.password.length > 0 && (
+                      <View style={{ gap: 4 }}>
+                        {[
+                          { ok: d.password.length >= 8, label: '8 ou mais caracteres' },
+                          { ok: /[A-Z]/.test(d.password), label: 'Uma letra maiúscula' },
+                          { ok: /[a-z]/.test(d.password), label: 'Uma letra minúscula' },
+                          { ok: /[0-9]/.test(d.password), label: 'Um número' },
+                        ].map((rule) => (
+                          <Text
+                            key={rule.label}
+                            style={{
+                              fontFamily: 'HankenGrotesk_600SemiBold',
+                              fontSize: 12.5,
+                              color: rule.ok ? colors.accent : colors.ink3,
+                            }}
+                          >
+                            {rule.ok ? '✓' : '○'} {rule.label}
+                          </Text>
+                        ))}
+                      </View>
+                    )}
                   </View>
+                </>
+              )}
 
-                  <Text style={{ fontFamily: 'HankenGrotesk_400Regular', fontSize: 12, color: colors.ink3, textAlign: 'center', lineHeight: 18 }}>
-                    Cartão cadastrado com segurança via Stripe. Você não será cobrado durante o período de teste.
-                  </Text>
-                </View>
+              {key === 'current' && <CurrentWeightStep value={d.current} unit="kg" onChange={(v) => set('current', v)} />}
+              {key === 'goaltype' && <GoalTypeStep value={d.goalType} onChange={(v) => set('goalType', v)} />}
+              {key === 'height' && <HeightStep heightCm={d.heightCm} unit="kg" onChange={(v) => set('heightCm', v)} />}
+              {key === 'goal' && (
+                <GoalWeightStep value={d.goal} unit="kg" current={d.current} goalType={d.goalType} onChange={(v) => set('goal', v)} />
+              )}
+              {key === 'activity' && <ActivityStep value={d.activity} onChange={(v) => set('activity', v)} />}
+              {key === 'reminders' && <RemindersStep value={d.reminders} onChange={(v) => set('reminders', v)} />}
+
+              {key === 'checkout' && (
+                <>
+                  <StepEyebrow>30 dias grátis</StepEyebrow>
+                  <StepQuestion>{'Configure\nseu plano'}</StepQuestion>
+                  <View style={{ gap: 20 }}>
+                    <View
+                      style={{
+                        backgroundColor: colors.accent + '18',
+                        borderRadius: radius.card / 2,
+                        padding: 14,
+                        flexDirection: 'row',
+                        gap: 10,
+                        alignItems: 'center',
+                      }}
+                    >
+                      <Text style={{ fontFamily: 'HankenGrotesk_700Bold', fontSize: 20 }}>🎁</Text>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontFamily: 'HankenGrotesk_700Bold', fontSize: 14, color: colors.accent }}>
+                          30 dias grátis
+                        </Text>
+                        <Text style={{ fontFamily: 'HankenGrotesk_400Regular', fontSize: 13, color: colors.ink2 }}>
+                          Primeira cobrança em {trialEndStr}
+                        </Text>
+                      </View>
+                    </View>
+
+                    <View style={{ gap: 8 }}>
+                      <Text style={{ fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 13, color: colors.ink3 }}>
+                        Período de cobrança
+                      </Text>
+                      <View style={{ flexDirection: 'row', gap: 10 }}>
+                        {(['monthly', 'annual'] as const).map((p) => (
+                          <TouchableOpacity
+                            key={p}
+                            onPress={() => set('billingPeriod', p)}
+                            style={{
+                              flex: 1,
+                              paddingVertical: 12,
+                              borderRadius: radius.card / 2,
+                              borderWidth: 1.5,
+                              borderColor: d.billingPeriod === p ? colors.accent : colors.line,
+                              backgroundColor: d.billingPeriod === p ? colors.accent + '12' : colors.surface,
+                              alignItems: 'center',
+                              gap: 2,
+                            }}
+                          >
+                            <Text style={{ fontFamily: 'HankenGrotesk_700Bold', fontSize: 14, color: d.billingPeriod === p ? colors.accent : colors.ink }}>
+                              {p === 'monthly' ? 'Mensal' : 'Anual'}
+                            </Text>
+                            {p === 'annual' && (
+                              <Text style={{ fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 11, color: colors.accent }}>
+                                20% de desconto
+                              </Text>
+                            )}
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    </View>
+
+                    <View style={{ gap: 14 }}>
+                      <CreditCardVisual
+                        colors={colors}
+                        radius={radius.card / 2}
+                        brand={cardBrand}
+                        holderName={d.cardholderName}
+                        cvvFocused={cvvFocused}
+                      />
+                      <StripeCardWebView
+                        ref={cardWebViewRef}
+                        publishableKey={process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? ''}
+                        colors={colors}
+                        radiusSm={radius.cardSm}
+                        onComplete={setCardReady}
+                        onBrandChange={setCardBrand}
+                        onCvcFocusChange={setCvvFocused}
+                      />
+                      <Field label="Nome no cartão">
+                        <StyledInput
+                          value={d.cardholderName}
+                          onChangeText={(t) => { set('cardholderName', t); setError(''); }}
+                          placeholder="Como aparece no cartão"
+                          autoCapitalize="characters"
+                          autoComplete="name"
+                        />
+                      </Field>
+                      <Field label="CPF">
+                        <StyledInput
+                          value={d.cpf}
+                          onChangeText={(t) => set('cpf', formatCpf(t))}
+                          placeholder="000.000.000-00"
+                          keyboardType="numeric"
+                        />
+                      </Field>
+                    </View>
+
+                    <Text style={{ fontFamily: 'HankenGrotesk_400Regular', fontSize: 12, color: colors.ink3, textAlign: 'center', lineHeight: 18 }}>
+                      Cartão cadastrado com segurança via Stripe. Você não será cobrado durante o período de teste.
+                    </Text>
+                  </View>
+                </>
               )}
 
               {error !== '' && (
@@ -550,15 +430,8 @@ export default function SignupScreen() {
             </Animated.View>
           </ScrollView>
 
-          {/* footer */}
           <View style={{ paddingTop: 16 }}>
-            <Btn
-              kind="primary"
-              full
-              onPress={next}
-              loading={loading}
-              disabled={isNextDisabled || loading}
-            >
+            <Btn kind="primary" full onPress={next} loading={loading} disabled={isNextDisabled || loading}>
               {step === total - 1 ? 'Finalizar' : 'Continuar'}
             </Btn>
           </View>

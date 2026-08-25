@@ -1,7 +1,7 @@
 // @ts-ignore - CSS import handled by NativeWind/metro
 import '../src/global.css';
 import React from 'react';
-import { Animated, View } from 'react-native';
+import { Animated, View, useColorScheme } from 'react-native';
 import { Stack, router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -23,6 +23,7 @@ import { ThemeContext, buildTheme } from '@/theme';
 import { useUIStore } from '@/store/ui.store';
 import { useAuthStore, type UserRole } from '@/store/auth.store';
 import { useStrengthStore } from '@/store/strength.store';
+import { GlobalPrCelebration } from '@/components/strength/GlobalPrCelebration';
 import {
   authClient,
   getRememberMeToken,
@@ -33,7 +34,7 @@ import {
 import { StripeProvider } from '@stripe/stripe-react-native';
 import { PostHogProvider } from 'posthog-react-native';
 import { posthog, identify } from '@/lib/analytics';
-import { registerPushToken } from '@/lib/notifications';
+import { registerPushToken, configureNotificationHandling } from '@/lib/notifications';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -124,7 +125,9 @@ const queryClient = new QueryClient({
 });
 
 export default function RootLayout() {
-  const { isDark, direction, accent } = useUIStore();
+  const { colorScheme, direction, accent } = useUIStore();
+  const systemColorScheme = useColorScheme();
+  const isDark = colorScheme === 'system' ? systemColorScheme === 'dark' : colorScheme === 'dark';
   const theme = buildTheme(isDark, direction, accent);
   const { setSession, markHydrated, setSubscriptionExpired } = useAuthStore();
   const [sessionChecked, setSessionChecked] = React.useState(false);
@@ -150,6 +153,10 @@ export default function RootLayout() {
   const fontsReady = fontsLoaded || !!fontError;
 
   React.useEffect(() => {
+    configureNotificationHandling(() => useAuthStore.getState().role);
+  }, []);
+
+  React.useEffect(() => {
     async function restoreSession() {
       console.log('RESTORE SESSION - início');
       // serverResponded = true quando o servidor devolveu qualquer resposta HTTP
@@ -162,9 +169,9 @@ export default function RootLayout() {
         serverResponded = true;
         if (data?.session && data?.user) {
           console.log('RESTORE SESSION - setSession');
-          const u = data.user as { id: string; email: string; role?: string; tenantId?: string | null };
+          const u = data.user as { id: string; email: string; name?: string | null; role?: string; tenantId?: string | null };
           const role: UserRole = u.role === 'COACH' ? 'COACH' : 'STUDENT';
-          setSession(u.id, u.email, role, { tenantId: u.tenantId ?? null });
+          setSession(u.id, u.email, role, { name: u.name ?? null, tenantId: u.tenantId ?? null });
           identify(u.id, role.toLowerCase());
           void registerPushToken();
           void refreshRememberMeToken(true);
@@ -242,6 +249,7 @@ export default function RootLayout() {
                 <Stack.Screen name="(coach)" />
                 <Stack.Screen name="(billing)" />
               </Stack>
+              <GlobalPrCelebration />
             </ThemeContext.Provider>
           </QueryClientProvider>
         </SafeAreaProvider>

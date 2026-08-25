@@ -7,11 +7,12 @@ import {
   ActivityIndicator,
   StyleSheet,
   BackHandler,
+  RefreshControl,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useFocusEffect } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
-import NetInfo from '@react-native-community/netinfo';
 import { useTheme } from '@/theme';
 import { useAuthStore } from '@/store/auth.store';
 import { useStrengthStore } from '@/store/strength.store';
@@ -21,11 +22,10 @@ import { useNotifications } from '@/api/hooks/useNotifications';
 import { useSetGoal } from '@/api/hooks/useGoals';
 import { useWorkoutTemplates, useCreateWorkoutTemplate } from '@/api/hooks/useWorkoutTemplates';
 import { useWorkouts } from '@/api/hooks/useWorkouts';
-import { useSyncWorkoutSession, useDiscardWorkoutSession } from '@/api/hooks/useWorkoutSession';
+import { useAssignedProgram } from '@/api/hooks/usePrograms';
 import { authClient } from '@/lib/auth';
-import { resetAnalytics, capture } from '@/lib/analytics';
-import { debounce } from '@/lib/debounce';
-import type { Workout, WorkoutSessionSnapshot, WorkoutSessionSyncResult, WorkoutStatus } from '@/types/api';
+import { resetAnalytics } from '@/lib/analytics';
+import type { Workout } from '@/types/api';
 import { Logo } from '@/components/shared/Logo';
 import { Avatar } from '@/components/shared/Avatar';
 import { BellIcon } from '@/components/shared/BellIcon';
@@ -35,9 +35,7 @@ import { WeightChart } from '@/components/weight/WeightChart';
 import { LogModal } from '@/components/weight/LogModal';
 import { GoalEditModal } from '@/components/weight/GoalEditModal';
 import { WorkoutEntry } from '@/components/strength/WorkoutEntry';
-import { ActiveSession } from '@/components/strength/ActiveSession';
 import { StrengthDashboard } from '@/components/strength/StrengthDashboard';
-import { PrCelebration } from '@/components/strength/PrCelebration';
 import { TemplateEditorModal } from '@/components/strength/TemplateEditorModal';
 import {
   round1,
@@ -49,8 +47,7 @@ import {
   todayISO,
 } from '@/lib/utils';
 import { semanticColors } from '@/theme';
-import type { ActiveSession as ActiveSessionType, Session, SetType, WorkSet } from '@/store/strength.store';
-import { exercisePeak1RM } from '@/store/strength.store';
+import type { Session, SetType, WorkSet } from '@/store/strength.store';
 
 function workoutToSession(w: Workout): Session {
   return {
@@ -82,7 +79,6 @@ function workoutToSession(w: Workout): Session {
 }
 
 type TabView = 'weight' | 'strength';
-type StrengthView = 'entry' | 'active';
 type GoalLocalType = 'lose' | 'strength' | 'maintain';
 
 function apiGoalTypeToLocal(gt: 'LOSE' | 'GAIN' | 'MAINTAIN' | undefined): GoalLocalType {
@@ -117,22 +113,39 @@ export default function DashboardScreen() {
   );
 
   // API data
-  const { data: studentProfile, isLoading: profileLoading } = useStudentProfile();
-  const { data: bodyRecords, isLoading: recordsLoading } = useBodyRecords();
-  const { data: notifications = [] } = useNotifications();
+  const { data: studentProfile, isLoading: profileLoading, refetch: refetchProfile } = useStudentProfile();
+  const { data: bodyRecords, isLoading: recordsLoading, refetch: refetchRecords } = useBodyRecords();
+  const { data: notifications = [], refetch: refetchNotifications } = useNotifications();
   const unreadCount = notifications.length;
   const logWeight = useLogWeight();
   const deleteRecord = useDeleteBodyRecord();
   const setGoalMutation = useSetGoal();
-  // Strength store — only active session state; data comes from API
-  const { activeSession, setActiveSession, updateActiveSession } = useStrengthStore();
+  // Strength store — só o estado da sessão ativa; a tela de treino em si vive numa
+  // rota dedicada (ver ActiveWorkoutScreen) fora do fluxo de tabs desta tela.
+  const { activeSession, setActiveSession } = useStrengthStore();
 
   // Strength API hooks
-  const { data: templatesRaw = [] } = useWorkoutTemplates();
-  const { data: workoutsRaw = [] } = useWorkouts();
+  const { data: templatesRaw = [], refetch: refetchTemplates } = useWorkoutTemplates();
+  const { data: workoutsRaw = [], refetch: refetchWorkouts } = useWorkouts();
+  const { data: assignedProgram, refetch: refetchAssignedProgram } = useAssignedProgram();
+
+  const [refreshing, setRefreshing] = React.useState(false);
+  async function onRefresh() {
+    setRefreshing(true);
+    try {
+      await Promise.all([
+        refetchProfile(),
+        refetchRecords(),
+        refetchNotifications(),
+        refetchTemplates(),
+        refetchWorkouts(),
+        refetchAssignedProgram(),
+      ]);
+    } finally {
+      setRefreshing(false);
+    }
+  }
   const createTemplate = useCreateWorkoutTemplate();
-  const syncSession = useSyncWorkoutSession();
-  const discardRemoteSession = useDiscardWorkoutSession();
 
   const templates = templatesRaw;
   const sessions = React.useMemo(() => workoutsRaw.map(workoutToSession), [workoutsRaw]);
@@ -144,12 +157,17 @@ export default function DashboardScreen() {
     return [...new Set(names)].sort();
   }, [sessions, templates]);
 
+  // Retoma a tela dedicada de treino se o app foi reaberto com uma sessão em
+  // andamento (ou travada em COMPLETED por um sync que falhou) — sem isso o
+  // usuário fica preso na home sem forma de voltar pro treino ativo.
+  React.useEffect(() => {
+    if (activeSession) router.push('/(app)/workout/active' as any);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- só no mount, resume de cold start
+  }, []);
+
   const [view, setView] = React.useState<TabView>('weight');
   const [weightSubView, setWeightSubView] = React.useState<'log' | 'charts'>('log');
   const [strengthSubView, setStrengthSubView] = React.useState<'workout' | 'dashboard'>('workout');
-  const [strengthView, setStrengthView] = React.useState<StrengthView>('entry');
-  const [pendingPRs, setPendingPRs] = React.useState<Session['prs']>([]);
-  const [showPRs, setShowPRs] = React.useState(false);
   const [logging, setLogging] = React.useState(false);
   const [editingGoal, setEditingGoal] = React.useState(false);
   const [menuOpen, setMenuOpen] = React.useState(false);
@@ -214,12 +232,23 @@ export default function DashboardScreen() {
     router.replace('/(auth)/login');
   }
 
-  // sessão anterior ainda sendo finalizada em background (ver finishSession) — não deixa
-  // sobrescrever até o checkpoint COMPLETED ter sucesso
+  // sessão anterior ainda sendo finalizada em background (ver ActiveWorkoutScreen) —
+  // não deixa sobrescrever até o checkpoint COMPLETED ter sucesso
   const finishingPrevious = activeSession?.status === 'COMPLETED';
 
+  function warnFinishingPrevious() {
+    Alert.alert(
+      'Finalizando treino anterior',
+      'Ainda estamos salvando seu último treino. Toque em "Ver treino" para finalizar ou descartar manualmente.',
+      [
+        { text: 'OK' },
+        { text: 'Ver treino', onPress: () => router.push('/(app)/workout/active' as any) },
+      ],
+    );
+  }
+
   function startTemplate(t: import('@/store/strength.store').Template) {
-    if (finishingPrevious) return;
+    if (finishingPrevious) { warnFinishingPrevious(); return; }
     setActiveSession({
       id: uid(),
       date: todayISO(),
@@ -234,11 +263,42 @@ export default function DashboardScreen() {
       exercises: t.exercises.map((name) => ({ name, sets: [] })),
       status: 'IN_PROGRESS',
     });
-    setStrengthView('active');
+    router.push('/(app)/workout/active' as any);
+  }
+
+  const nextProgramDay = React.useMemo(() => {
+    if (!assignedProgram || !assignedProgram.days.length) return null;
+    const days = assignedProgram.days;
+    const progSessions = sessions
+      .filter((s) => s.programId === assignedProgram.id)
+      .sort((a, b) => a.date.localeCompare(b.date));
+    if (!progSessions.length) return days[0];
+    const idx = days.findIndex((d) => d.name === progSessions[progSessions.length - 1].templateName);
+    return idx === -1 ? days[0] : days[(idx + 1) % days.length];
+  }, [assignedProgram, sessions]);
+
+  function startProgramDay() {
+    if (finishingPrevious) { warnFinishingPrevious(); return; }
+    if (!nextProgramDay || !assignedProgram) return;
+    setActiveSession({
+      id: uid(),
+      date: todayISO(),
+      templateId: null,
+      templateName: nextProgramDay.name,
+      programId: assignedProgram.id,
+      programName: assignedProgram.name,
+      yolo: false,
+      startedAt: null,
+      accumulatedSec: 0,
+      targetMin: null,
+      exercises: nextProgramDay.exercises.map((name) => ({ name, sets: [] })),
+      status: 'IN_PROGRESS',
+    });
+    router.push('/(app)/workout/active' as any);
   }
 
   function startYolo() {
-    if (finishingPrevious) return;
+    if (finishingPrevious) { warnFinishingPrevious(); return; }
     setActiveSession({
       id: uid(),
       date: todayISO(),
@@ -253,122 +313,7 @@ export default function DashboardScreen() {
       exercises: [],
       status: 'IN_PROGRESS',
     });
-    setStrengthView('active');
-  }
-
-  function buildSnapshot(session: ActiveSessionType, status: WorkoutStatus): WorkoutSessionSnapshot {
-    const live = session.startedAt
-      ? Math.max(0, Math.floor((Date.now() - session.startedAt) / 1000))
-      : 0;
-    return {
-      performedAt: new Date(session.date + 'T12:00:00').toISOString(),
-      durationSec: (session.accumulatedSec || 0) + live,
-      templateId: session.templateId,
-      templateName: session.templateName,
-      programId: session.programId,
-      programName: session.programName,
-      status,
-      exercises: session.exercises
-        .filter((ex) => ex.sets.length > 0)
-        .map((ex) => ({
-          name: ex.name,
-          sets: ex.sets.map((s, i) => ({
-            clientSetId: s.id,
-            setNumber: i + 1,
-            setType: (s.type?.toUpperCase() ?? 'WORK') as WorkoutSessionSnapshot['exercises'][0]['sets'][0]['setType'],
-            reps: s.reps,
-            weight: s.weight,
-          })),
-        })),
-    };
-  }
-
-  function handleSyncResult(result: WorkoutSessionSyncResult) {
-    if (result.newPRs.length > 0) {
-      for (const pr of result.newPRs) {
-        capture('pr_achieved', { exerciseName: pr.exerciseName });
-      }
-      const mappedPRs = result.newPRs.map((pr) => ({
-        exercise: pr.exerciseName,
-        e: round1(pr.estimated1RM),
-        prevBest: round1(pr.prevBest),
-        weight: null as number | null,
-        reps: null as number | null,
-      }));
-      setPendingPRs(mappedPRs);
-      setShowPRs(true);
-    }
-  }
-
-  const debouncedSync = React.useMemo(
-    () =>
-      debounce((session: ActiveSessionType) => {
-        syncSession.mutate(
-          { clientId: session.id, snapshot: buildSnapshot(session, session.status) },
-          {
-            onSuccess: (result) => {
-              handleSyncResult(result);
-              // Reconectou depois de finalizar offline (ver finishSession) — o snapshot
-              // já foi enviado como COMPLETED acima, então replica a limpeza local que
-              // finishSession faria se tivesse tido rede na hora.
-              if (session.status === 'COMPLETED') {
-                setActiveSession(null);
-                queryClient.invalidateQueries({ queryKey: ['workouts'] });
-                capture('workout_logged', {
-                  exerciseCount: session.exercises.filter((e) => e.sets.length > 0).length,
-                });
-              }
-            },
-          },
-        );
-      }, 400),
-    [syncSession],
-  );
-
-  // sync a cada mudança de conteúdo (séries/exercícios) — não em cada tick do timer
-  React.useEffect(() => {
-    if (!activeSession || activeSession.status === 'COMPLETED') return;
-    if (activeSession.exercises.every((e) => e.sets.length === 0)) return;
-    debouncedSync(activeSession);
-    return () => debouncedSync.cancel();
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- intencionalmente não observa startedAt/accumulatedSec
-  }, [activeSession?.exercises]);
-
-  // retry ao reconectar — não depende de fila offline, só reenvia o snapshot atual
-  React.useEffect(() => {
-    const unsub = NetInfo.addEventListener((state) => {
-      if (!state.isConnected || !activeSession) return;
-      const hasContent = activeSession.exercises.some((e) => e.sets.length > 0);
-      if (hasContent) debouncedSync(activeSession);
-    });
-    return unsub;
-  }, [activeSession, debouncedSync]);
-
-  async function finishSession() {
-    if (!activeSession) return;
-    debouncedSync.cancel(); // evita que um sync IN_PROGRESS atrasado sobrescreva o COMPLETED
-    updateActiveSession((a) => ({ ...a, status: 'COMPLETED' }));
-    setStrengthView('entry');
-
-    const snapshot = buildSnapshot(activeSession, 'COMPLETED');
-    try {
-      const result = await syncSession.mutateAsync({ clientId: activeSession.id, snapshot });
-      setActiveSession(null);
-      queryClient.invalidateQueries({ queryKey: ['workouts'] });
-      capture('workout_logged', { exerciseCount: snapshot.exercises.length });
-      handleSyncResult(result);
-    } catch {
-      // offline: a sessão com status COMPLETED continua persistida em disco; o listener
-      // de reconexão acima reenvia automaticamente quando a rede voltar.
-    }
-  }
-
-  function discardSession() {
-    debouncedSync.cancel(); // evita ressuscitar um rascunho recém descartado
-    const clientId = activeSession?.id;
-    setActiveSession(null);
-    setStrengthView('entry');
-    if (clientId) discardRemoteSession.mutate(clientId);
+    router.push('/(app)/workout/active' as any);
   }
 
   if (profileLoading && recordsLoading) {
@@ -525,35 +470,36 @@ export default function DashboardScreen() {
         />
       </View>
 
-      {/* sub-tab selector — only when no active workout */}
-      {strengthView !== 'active' && (
-        <View style={{ paddingHorizontal: 20, paddingBottom: 12 }}>
-          {view === 'weight' ? (
-            <SegmentedControl
-              options={[
-                { value: 'log', label: 'Registrar' },
-                { value: 'charts', label: 'Gráficos' },
-              ]}
-              value={weightSubView}
-              onChange={(v) => setWeightSubView(v as 'log' | 'charts')}
-            />
-          ) : (
-            <SegmentedControl
-              options={[
-                { value: 'workout', label: 'Treinar' },
-                { value: 'dashboard', label: 'Gráficos' },
-              ]}
-              value={strengthSubView}
-              onChange={(v) => setStrengthSubView(v as 'workout' | 'dashboard')}
-            />
-          )}
-        </View>
-      )}
+      {/* sub-tab selector */}
+      <View style={{ paddingHorizontal: 20, paddingBottom: 12 }}>
+        {view === 'weight' ? (
+          <SegmentedControl
+            options={[
+              { value: 'log', label: 'Registrar' },
+              { value: 'charts', label: 'Gráficos' },
+            ]}
+            value={weightSubView}
+            onChange={(v) => setWeightSubView(v as 'log' | 'charts')}
+          />
+        ) : (
+          <SegmentedControl
+            options={[
+              { value: 'workout', label: 'Treinar' },
+              { value: 'dashboard', label: 'Gráficos' },
+            ]}
+            value={strengthSubView}
+            onChange={(v) => setStrengthSubView(v as 'workout' | 'dashboard')}
+          />
+        )}
+      </View>
 
       <ScrollView
         contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 40, gap: 14 }}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.ink3} />
+        }
       >
         {/* ── PESO ── */}
         {view === 'weight' && weightSubView === 'log' && (
@@ -594,6 +540,53 @@ export default function DashboardScreen() {
                   </TouchableOpacity>
                 </View>
               </View>
+            )}
+
+            {/* HOJE — próximo dia do programa do coach */}
+            {assignedProgram && nextProgramDay && (
+              <Card style={{ gap: 12 }}>
+                <View style={{ gap: 3 }}>
+                  <Text style={{ fontFamily: 'HankenGrotesk_700Bold', fontSize: 11.5, letterSpacing: 1, textTransform: 'uppercase', color: colors.accent }}>
+                    Hoje
+                  </Text>
+                  <Text style={{ fontFamily: 'Archivo_800ExtraBold', fontSize: 21, letterSpacing: direction === 'A' ? 0 : -0.3, color: colors.ink }}>
+                    {nextProgramDay.name}
+                  </Text>
+                  <Text style={{ fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 12.5, color: colors.ink3 }}>
+                    {assignedProgram.name} · {assignedProgram.perWeek}×/semana
+                  </Text>
+                </View>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                  {nextProgramDay.exercises.map((name, i) => (
+                    <View
+                      key={i}
+                      style={{
+                        backgroundColor: colors.surface2,
+                        borderRadius: 10,
+                        paddingHorizontal: 9,
+                        paddingVertical: 4,
+                        borderWidth: 1,
+                        borderColor: colors.line,
+                      }}
+                    >
+                      <Text style={{ fontFamily: 'HankenGrotesk_700Bold', fontSize: 11.5, color: colors.ink2 }}>{name}</Text>
+                    </View>
+                  ))}
+                </View>
+                <TouchableOpacity
+                  onPress={startProgramDay}
+                  style={{
+                    backgroundColor: colors.accent,
+                    borderRadius: direction === 'A' ? 4 : 10,
+                    paddingVertical: 13,
+                    alignItems: 'center',
+                  }}
+                >
+                  <Text style={{ fontFamily: 'HankenGrotesk_700Bold', fontSize: 14, color: '#fff' }}>
+                    Iniciar sessão →
+                  </Text>
+                </TouchableOpacity>
+              </Card>
             )}
 
             {/* HERO CARD */}
@@ -756,18 +749,7 @@ export default function DashboardScreen() {
         )}
 
         {/* ── FORÇA ── */}
-        {view === 'strength' && strengthView === 'active' && activeSession && (
-          <ActiveSession
-            active={activeSession}
-            sessions={sessions}
-            unit={u}
-            onUpdateActive={updateActiveSession}
-            onFinish={finishSession}
-            onDiscard={discardSession}
-          />
-        )}
-
-        {view === 'strength' && strengthView !== 'active' && strengthSubView === 'workout' && (
+        {view === 'strength' && strengthSubView === 'workout' && (
           <WorkoutEntry
             templates={templates}
             onStartTemplate={startTemplate}
@@ -779,7 +761,7 @@ export default function DashboardScreen() {
           />
         )}
 
-        {view === 'strength' && strengthView !== 'active' && strengthSubView === 'dashboard' && (
+        {view === 'strength' && strengthSubView === 'dashboard' && (
           <StrengthDashboard
             sessions={sessions}
             templates={templates}
@@ -811,13 +793,6 @@ export default function DashboardScreen() {
           setEditingGoal(false);
         }}
         onClose={() => setEditingGoal(false)}
-      />
-
-      <PrCelebration
-        visible={showPRs}
-        prs={pendingPRs ?? []}
-        unit={u}
-        onClose={() => { setShowPRs(false); setPendingPRs([]); }}
       />
 
       <TemplateEditorModal

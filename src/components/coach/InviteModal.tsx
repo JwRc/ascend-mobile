@@ -8,8 +8,9 @@ import {
 import { useTheme } from '@/theme';
 import { AppModal } from '@/components/shared/AppModal';
 import { SegmentedControl } from '@/components/shared/SegmentedControl';
-import { COACH_ACCOUNT, billingFor, type CoachProgram } from '@/store/coach.store';
+import { type CoachProgram } from '@/store/coach.store';
 import { capture } from '@/lib/analytics';
+import { usePrices } from '@/api/hooks/useBilling';
 
 type Props = {
   visible: boolean;
@@ -59,8 +60,13 @@ export function InviteModal({ visible, programs, activeCount, loading, error, on
     capture('invite_sent');
   }
 
-  const billing = billingFor(activeCount + 1);
-  const overSeats = activeCount >= COACH_ACCOUNT.includedSeats;
+  const { data: prices } = usePrices();
+  const includedSeats = prices?.coach.baseStudents ?? 0;
+  const pricePerExtra = prices?.coach.extraStudentPrice ?? 0;
+  const basePrice = prices?.coach.basePrice ?? 0;
+  const extra = Math.max(0, activeCount + 1 - includedSeats);
+  const billing = { extra, total: basePrice + extra * pricePerExtra };
+  const overSeats = !!prices && activeCount >= includedSeats;
   const selectedProg = programs.find((p) => p.id === programId) ?? null;
   const valid = name.trim().length > 0 && contact.trim().length > 0;
 
@@ -233,10 +239,10 @@ export function InviteModal({ visible, programs, activeCount, loading, error, on
                 }}
               >
                 <Text style={{ fontFamily: 'HankenGrotesk_700Bold', fontSize: 13, color: colors.accent }}>
-                  + R$ {COACH_ACCOUNT.pricePerExtra}/mês
+                  + R$ {pricePerExtra}/mês
                 </Text>
                 <Text style={{ fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 12.5, color: colors.ink2 }}>
-                  Convidar este atleta adicionará + R$ {COACH_ACCOUNT.pricePerExtra} à sua assinatura
+                  Convidar este atleta adicionará + R$ {pricePerExtra} à sua assinatura
                   (total: R$ {billing.total}/mês).
                 </Text>
               </View>

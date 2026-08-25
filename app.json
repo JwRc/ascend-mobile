@@ -45,7 +45,8 @@
           "merchantIdentifier": "merchant.com.anonymous.ascentiomobile",
           "enableGooglePay": false
         }
-      ]
+      ],
+      "expo-sharing"
     ],
     "experiments": {
       "typedRoutes": true

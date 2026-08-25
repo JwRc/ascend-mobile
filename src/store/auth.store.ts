@@ -9,6 +9,7 @@ type AuthState = {
   hydrated: boolean;
   userId: string | null;
   email: string | null;
+  name: string | null;
   role: UserRole | null;
   tenantId: string | null;
   plan: "BASE" | "CUSTOM" | null;
@@ -20,6 +21,7 @@ type AuthState = {
     email: string,
     role: UserRole,
     opts?: {
+      name?: string | null;
       tenantId?: string | null;
       plan?: "BASE" | "CUSTOM";
       offlineGraceUntil?: number;
@@ -36,6 +38,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   hydrated: false,
   userId: null,
   email: null,
+  name: null,
   role: null,
   tenantId: null,
   plan: null,
@@ -48,6 +51,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       isAuthenticated: true,
       userId,
       email,
+      name: opts?.name ?? null,
       role,
       tenantId: opts?.tenantId ?? null,
       plan: opts?.plan ?? null,
@@ -64,6 +68,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       isAuthenticated: false,
       userId: null,
       email: null,
+      name: null,
       role: null,
       tenantId: null,
       plan: null,

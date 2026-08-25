@@ -12,6 +12,8 @@ interface Props {
   colors: ThemeColors;
   radiusSm: number;
   onComplete(complete: boolean): void;
+  onBrandChange?(brand: string): void;
+  onCvcFocusChange?(focused: boolean): void;
 }
 
 function buildHtml(key: string, c: ThemeColors, radius: number): string {
@@ -89,9 +91,15 @@ function buildHtml(key: string, c: ThemeColors, radius: number): string {
       p[1].on('focus', function() { el.classList.add('focused'); });
       p[1].on('blur',  function() { el.classList.remove('focused'); });
     });
+    cc.on('focus', function() { post({ type: 'CVC_FOCUS', focused: true }); });
+    cc.on('blur',  function() { post({ type: 'CVC_FOCUS', focused: false }); });
     var done = { n: false, e: false, c: false };
     function check() { post({ type: 'COMPLETE', complete: done.n && done.e && done.c }); }
-    cn.on('change', function(e) { done.n = e.complete; check(); });
+    cn.on('change', function(e) {
+      done.n = e.complete;
+      post({ type: 'BRAND', brand: e.brand || 'unknown' });
+      check();
+    });
     ce.on('change', function(e) { done.e = e.complete; check(); });
     cc.on('change', function(e) { done.c = e.complete; check(); });
     window.doCreatePM = function(billingDetails) {
@@ -108,7 +116,7 @@ function buildHtml(key: string, c: ThemeColors, radius: number): string {
 }
 
 export const StripeCardWebView = forwardRef<StripeCardWebViewRef, Props>(
-  ({ publishableKey, colors, radiusSm, onComplete }, ref) => {
+  ({ publishableKey, colors, radiusSm, onComplete, onBrandChange, onCvcFocusChange }, ref) => {
     const webviewRef = useRef<WebView>(null);
     const resolveRef = useRef<((id: string) => void) | null>(null);
     const rejectRef  = useRef<((err: Error) => void) | null>(null);
@@ -130,6 +138,10 @@ export const StripeCardWebView = forwardRef<StripeCardWebViewRef, Props>(
         const msg = JSON.parse(event.nativeEvent.data);
         if (msg.type === 'COMPLETE') {
           onComplete(msg.complete);
+        } else if (msg.type === 'BRAND') {
+          onBrandChange?.(msg.brand);
+        } else if (msg.type === 'CVC_FOCUS') {
+          onCvcFocusChange?.(msg.focused);
         } else if (msg.type === 'PM_RESULT') {
           resolveRef.current?.(msg.id);
           resolveRef.current = null;

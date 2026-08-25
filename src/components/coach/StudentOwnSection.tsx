@@ -1,29 +1,28 @@
 import React from 'react';
-import { View, Text, TouchableOpacity } from 'react-native';
-import { useQueryClient } from '@tanstack/react-query';
-import NetInfo from '@react-native-community/netinfo';
+import { View, Text, TouchableOpacity, TextInput, Alert } from 'react-native';
+import { router } from 'expo-router';
 import { useTheme, semanticColors } from '@/theme';
 import { SegmentedControl } from '@/components/shared/SegmentedControl';
 import { Card } from '@/components/shared/Card';
+import { Stepper } from '@/components/shared/Stepper';
 import { LogModal } from '@/components/weight/LogModal';
 import { WeightChart } from '@/components/weight/WeightChart';
 import { WorkoutEntry } from '@/components/strength/WorkoutEntry';
-import { ActiveSession } from '@/components/strength/ActiveSession';
 import { StrengthDashboard } from '@/components/strength/StrengthDashboard';
-import { PrCelebration } from '@/components/strength/PrCelebration';
 import { TemplateEditorModal } from '@/components/strength/TemplateEditorModal';
+import { StatChip, SectionLabel, ProgramPicker } from './AthleteDetailBits';
 import { useBodyRecords, useLogWeight, useDeleteBodyRecord } from '@/api/hooks/useBodyRecords';
 import { useStudentProfile } from '@/api/hooks/useStudentProfile';
 import { useWorkoutTemplates, useCreateWorkoutTemplate } from '@/api/hooks/useWorkoutTemplates';
 import { useWorkouts } from '@/api/hooks/useWorkouts';
-import { useSyncWorkoutSession, useDiscardWorkoutSession } from '@/api/hooks/useWorkoutSession';
 import { useStrengthStore } from '@/store/strength.store';
 import {
   round1, movingAverage, weighInStreak, last7Days, convert, fmtDateLong, todayISO,
 } from '@/lib/utils';
-import { debounce } from '@/lib/debounce';
-import type { Workout, WorkoutSessionSnapshot, WorkoutSessionSyncResult, WorkoutStatus } from '@/types/api';
-import type { ActiveSession as ActiveSessionType, Session, SetType, WorkSet, Template } from '@/store/strength.store';
+import { STALE_DAYS } from '@/store/coach.store';
+import type { Workout } from '@/types/api';
+import type { Session, SetType, WorkSet, Template } from '@/store/strength.store';
+import type { CoachAthlete, CoachProgram } from '@/store/coach.store';
 
 function uid() {
   return Math.random().toString(36).slice(2, 10);
@@ -58,12 +57,18 @@ function workoutToSession(w: Workout): Session {
   };
 }
 
-type Props = { units: 'kg' | 'lb' };
+type Props = {
+  units: 'kg' | 'lb';
+  athlete: CoachAthlete;
+  programs: CoachProgram[];
+  onAssignProgram: (athleteId: string, programId: string | null) => void;
+  onUpdateGoal: (athleteId: string, goal: number) => void;
+  onUpdateNotes: (athleteId: string, notes: string) => void;
+};
 
-export function StudentOwnSection({ units }: Props) {
-  const { colors, direction } = useTheme();
+export function StudentOwnSection({ units, athlete, programs, onAssignProgram, onUpdateGoal, onUpdateNotes }: Props) {
+  const { colors, radius, direction } = useTheme();
   const u = units;
-  const queryClient = useQueryClient();
 
   const { data: bodyRecords = [] } = useBodyRecords();
   const { data: profile } = useStudentProfile();
@@ -72,18 +77,27 @@ export function StudentOwnSection({ units }: Props) {
   const logWeight = useLogWeight();
   const deleteRecord = useDeleteBodyRecord();
   const createTemplate = useCreateWorkoutTemplate();
-  const syncSession = useSyncWorkoutSession();
-  const discardRemoteSession = useDiscardWorkoutSession();
-  const { activeSession, setActiveSession, updateActiveSession } = useStrengthStore();
+  const { activeSession, setActiveSession } = useStrengthStore();
 
-  const [tab, setTab] = React.useState<'weight' | 'strength'>('strength');
+  const [tab, setTab] = React.useState<'weight' | 'strength' | 'metrics'>('metrics');
   const [weightSubTab, setWeightSubTab] = React.useState<'log' | 'charts'>('log');
   const [strengthSubTab, setStrengthSubTab] = React.useState<'workout' | 'dashboard'>('workout');
-  const [strengthView, setStrengthView] = React.useState<'entry' | 'active'>('entry');
   const [showLogModal, setShowLogModal] = React.useState(false);
-  const [pendingPRs, setPendingPRs] = React.useState<{ exercise: string; e: number; prevBest: number; weight: number | null; reps: number | null }[]>([]);
-  const [showPRs, setShowPRs] = React.useState(false);
   const [editTplId, setEditTplId] = React.useState<string | null>(null);
+  const [notes, setNotes] = React.useState(athlete.notes);
+  const [notesDirty, setNotesDirty] = React.useState(false);
+
+  React.useEffect(() => {
+    setNotes(athlete.notes);
+    setNotesDirty(false);
+  }, [athlete.id]);
+
+  const lostGood = athlete.goalDir === 'lose' ? athlete.weekDelta < 0 : athlete.weekDelta > 0;
+  const metricsArrow = athlete.weekDelta === 0 ? '—' : athlete.weekDelta < 0 ? '▾' : '▴';
+  const sessionLabel =
+    athlete.assignedPerWeek != null
+      ? `${athlete.sessionsThisWeek}/${athlete.assignedPerWeek}`
+      : `${athlete.sessionsThisWeek}`;
 
   // weight data
   const sortedRecords = [...bodyRecords].sort((a, b) => a.recordedAt.localeCompare(b.recordedAt));
@@ -134,12 +148,23 @@ export function StudentOwnSection({ units }: Props) {
   const trendNeutral = weekDelta === 0;
   const trendColor = trendNeutral ? colors.ink3 : trendGood ? semanticColors.success : semanticColors.warning;
 
-  // sessão anterior ainda sendo finalizada em background (ver finishSession) — não deixa
-  // sobrescrever até o checkpoint COMPLETED ter sucesso
+  // sessão anterior ainda sendo finalizada em background (ver ActiveWorkoutScreen) —
+  // não deixa sobrescrever até o checkpoint COMPLETED ter sucesso
   const finishingPrevious = activeSession?.status === 'COMPLETED';
 
+  function warnFinishingPrevious() {
+    Alert.alert(
+      'Finalizando treino anterior',
+      'Ainda estamos salvando seu último treino. Toque em "Ver treino" para finalizar ou descartar manualmente.',
+      [
+        { text: 'OK' },
+        { text: 'Ver treino', onPress: () => router.push('/(coach)/workout/active' as any) },
+      ],
+    );
+  }
+
   function startTemplate(t: Template) {
-    if (finishingPrevious) return;
+    if (finishingPrevious) { warnFinishingPrevious(); return; }
     setActiveSession({
       id: uid(),
       date: todayISO(),
@@ -154,11 +179,11 @@ export function StudentOwnSection({ units }: Props) {
       exercises: t.exercises.map((name) => ({ name, sets: [] })),
       status: 'IN_PROGRESS',
     });
-    setStrengthView('active');
+    router.push('/(coach)/workout/active' as any);
   }
 
   function startYolo() {
-    if (finishingPrevious) return;
+    if (finishingPrevious) { warnFinishingPrevious(); return; }
     setActiveSession({
       id: uid(),
       date: todayISO(),
@@ -173,103 +198,7 @@ export function StudentOwnSection({ units }: Props) {
       exercises: [],
       status: 'IN_PROGRESS',
     });
-    setStrengthView('active');
-  }
-
-  function buildSnapshot(session: ActiveSessionType, status: WorkoutStatus): WorkoutSessionSnapshot {
-    const live = session.startedAt
-      ? Math.max(0, Math.floor((Date.now() - session.startedAt) / 1000))
-      : 0;
-    return {
-      performedAt: new Date(session.date + 'T12:00:00').toISOString(),
-      durationSec: (session.accumulatedSec || 0) + live,
-      templateId: session.templateId,
-      templateName: session.templateName,
-      programId: session.programId,
-      programName: session.programName,
-      status,
-      exercises: session.exercises
-        .filter((ex) => ex.sets.length > 0)
-        .map((ex) => ({
-          name: ex.name,
-          sets: ex.sets.map((s, i) => ({
-            clientSetId: s.id,
-            setNumber: i + 1,
-            setType: (s.type?.toUpperCase() ?? 'WORK') as WorkoutSessionSnapshot['exercises'][0]['sets'][0]['setType'],
-            reps: s.reps,
-            weight: s.weight,
-          })),
-        })),
-    };
-  }
-
-  function handleSyncResult(result: WorkoutSessionSyncResult) {
-    if (result.newPRs.length > 0) {
-      setPendingPRs(
-        result.newPRs.map((pr) => ({
-          exercise: pr.exerciseName,
-          e: round1(pr.estimated1RM),
-          prevBest: round1(pr.prevBest),
-          weight: null,
-          reps: null,
-        })),
-      );
-      setShowPRs(true);
-    }
-  }
-
-  const debouncedSync = React.useMemo(
-    () =>
-      debounce((session: ActiveSessionType) => {
-        syncSession.mutate(
-          { clientId: session.id, snapshot: buildSnapshot(session, 'IN_PROGRESS') },
-          { onSuccess: handleSyncResult },
-        );
-      }, 400),
-    [syncSession],
-  );
-
-  React.useEffect(() => {
-    if (!activeSession || activeSession.status === 'COMPLETED') return;
-    if (activeSession.exercises.every((e) => e.sets.length === 0)) return;
-    debouncedSync(activeSession);
-    return () => debouncedSync.cancel();
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- intencionalmente não observa startedAt/accumulatedSec
-  }, [activeSession?.exercises]);
-
-  React.useEffect(() => {
-    const unsub = NetInfo.addEventListener((state) => {
-      if (!state.isConnected || !activeSession) return;
-      const hasContent = activeSession.exercises.some((e) => e.sets.length > 0);
-      if (hasContent) debouncedSync(activeSession);
-    });
-    return unsub;
-  }, [activeSession, debouncedSync]);
-
-  async function finishSession() {
-    if (!activeSession) return;
-    debouncedSync.cancel(); // evita que um sync IN_PROGRESS atrasado sobrescreva o COMPLETED
-    updateActiveSession((a) => ({ ...a, status: 'COMPLETED' }));
-    setStrengthView('entry');
-
-    const snapshot = buildSnapshot(activeSession, 'COMPLETED');
-    try {
-      const result = await syncSession.mutateAsync({ clientId: activeSession.id, snapshot });
-      setActiveSession(null);
-      queryClient.invalidateQueries({ queryKey: ['workouts'] });
-      handleSyncResult(result);
-    } catch {
-      // offline: a sessão com status COMPLETED continua persistida em disco; o listener
-      // de reconexão acima reenvia automaticamente quando a rede voltar.
-    }
-  }
-
-  function discardSession() {
-    debouncedSync.cancel(); // evita ressuscitar um rascunho recém descartado
-    const clientId = activeSession?.id;
-    setActiveSession(null);
-    setStrengthView('entry');
-    if (clientId) discardRemoteSession.mutate(clientId);
+    router.push('/(coach)/workout/active' as any);
   }
 
   return (
@@ -277,14 +206,15 @@ export function StudentOwnSection({ units }: Props) {
       {/* divider */}
       <View style={{ height: 1.5, backgroundColor: colors.line }} />
 
-      {/* Peso / Força main tabs */}
+      {/* Peso / Força / Métricas main tabs */}
       <SegmentedControl
         options={[
           { value: 'weight', label: 'Peso' },
           { value: 'strength', label: 'Força' },
+          { value: 'metrics', label: 'Métricas' },
         ]}
         value={tab}
-        onChange={(v) => setTab(v as 'weight' | 'strength')}
+        onChange={(v) => setTab(v as 'weight' | 'strength' | 'metrics')}
       />
 
       {/* sub-tabs */}
@@ -299,7 +229,7 @@ export function StudentOwnSection({ units }: Props) {
         />
       )}
 
-      {tab === 'strength' && strengthView !== 'active' && (
+      {tab === 'strength' && (
         <SegmentedControl
           options={[
             { value: 'workout', label: 'Treinar' },
@@ -495,20 +425,8 @@ export function StudentOwnSection({ units }: Props) {
         </>
       )}
 
-      {/* ── FORÇA · ACTIVE SESSION ── */}
-      {tab === 'strength' && strengthView === 'active' && activeSession && (
-        <ActiveSession
-          active={activeSession}
-          sessions={sessions}
-          unit={u}
-          onUpdateActive={updateActiveSession}
-          onFinish={finishSession}
-          onDiscard={discardSession}
-        />
-      )}
-
       {/* ── FORÇA · TREINAR ── */}
-      {tab === 'strength' && strengthView !== 'active' && strengthSubTab === 'workout' && (
+      {tab === 'strength' && strengthSubTab === 'workout' && (
         <WorkoutEntry
           templates={templates}
           onStartTemplate={startTemplate}
@@ -521,13 +439,145 @@ export function StudentOwnSection({ units }: Props) {
       )}
 
       {/* ── FORÇA · GRÁFICOS ── */}
-      {tab === 'strength' && strengthView !== 'active' && strengthSubTab === 'dashboard' && (
+      {tab === 'strength' && strengthSubTab === 'dashboard' && (
         <StrengthDashboard
           sessions={sessions}
           templates={templates}
           unit={u}
           onStartWorkout={startYolo}
         />
+      )}
+
+      {/* ── MÉTRICAS ── */}
+      {tab === 'metrics' && (
+        <>
+          {/* stat strip */}
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+            <StatChip label={`Peso (${u})`} value={athlete.trend} />
+            <StatChip
+              label="Δ semana"
+              value={`${metricsArrow} ${Math.abs(athlete.weekDelta)}`}
+              warn={athlete.goalDir !== 'maintain' && !lostGood}
+            />
+            <StatChip label="Meta %" value={athlete.goalPct} unit="%" />
+            <StatChip
+              label="Último log"
+              value={
+                athlete.daysSinceLog == null
+                  ? '—'
+                  : athlete.daysSinceLog === 0
+                  ? 'hoje'
+                  : `${athlete.daysSinceLog}d`
+              }
+              warn={athlete.daysSinceLog != null && athlete.daysSinceLog >= STALE_DAYS}
+            />
+            <StatChip label="Sessões/sem" value={sessionLabel} />
+          </View>
+
+          {/* programa */}
+          <View style={{ gap: 10 }}>
+            <SectionLabel title="Programa" />
+            <ProgramPicker
+              programs={programs}
+              value={athlete.programId}
+              onChange={(id) => onAssignProgram(athlete.id, id)}
+            />
+            {athlete.programId && (() => {
+              const prog = programs.find((p) => p.id === athlete.programId);
+              if (!prog) return null;
+              return (
+                <View
+                  style={{
+                    backgroundColor: colors.surface2,
+                    borderRadius: radius.cardSm,
+                    padding: 12,
+                    gap: 6,
+                  }}
+                >
+                  <Text style={{ fontFamily: 'HankenGrotesk_700Bold', fontSize: 12.5, color: colors.ink3 }}>
+                    {prog.focus} · {prog.perWeek}×/sem · {prog.days.length} dias
+                  </Text>
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 5 }}>
+                    {prog.days.map((d) => (
+                      <View
+                        key={d.id}
+                        style={{
+                          backgroundColor: colors.surface,
+                          borderRadius: 10,
+                          paddingHorizontal: 8,
+                          paddingVertical: 3,
+                          borderWidth: 1,
+                          borderColor: colors.line,
+                        }}
+                      >
+                        <Text style={{ fontFamily: 'HankenGrotesk_700Bold', fontSize: 11.5, color: colors.ink2 }}>
+                          {d.name}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              );
+            })()}
+          </View>
+
+          {/* meta */}
+          <View style={{ gap: 10 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <SectionLabel title="Meta de peso" />
+              <Text style={{ fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 12, color: colors.ink3 }}>
+                {athlete.goalDir === 'lose' ? 'Emagrecimento' : athlete.goalDir === 'gain' ? 'Ganho de massa' : 'Manutenção'} · {u}
+              </Text>
+            </View>
+            <Stepper
+              value={athlete.goal ?? athlete.trend ?? 70}
+              step={0.5}
+              unit={u}
+              min={30}
+              max={250}
+              onChange={(v) => onUpdateGoal(athlete.id, v)}
+            />
+          </View>
+
+          {/* notas */}
+          <View style={{ gap: 10 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <SectionLabel title="Notas do coach" />
+              {notesDirty && (
+                <TouchableOpacity
+                  onPress={() => {
+                    onUpdateNotes(athlete.id, notes);
+                    setNotesDirty(false);
+                  }}
+                >
+                  <Text style={{ fontFamily: 'HankenGrotesk_700Bold', fontSize: 13, color: colors.accent }}>
+                    Salvar
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
+            <TextInput
+              value={notes}
+              onChangeText={(t) => { setNotes(t); setNotesDirty(true); }}
+              multiline
+              numberOfLines={4}
+              textAlignVertical="top"
+              placeholder="Observações, restrições, histórico relevante…"
+              placeholderTextColor={colors.ink3}
+              style={{
+                fontFamily: 'HankenGrotesk_600SemiBold',
+                fontSize: 14,
+                color: colors.ink,
+                backgroundColor: colors.surface2,
+                borderWidth: 1.5,
+                borderColor: notesDirty ? colors.accent : colors.line,
+                borderRadius: radius.card,
+                padding: 14,
+                minHeight: 110,
+              }}
+            />
+          </View>
+        </>
       )}
 
       {/* Modals */}
@@ -542,15 +592,6 @@ export function StudentOwnSection({ units }: Props) {
         }}
         onClose={() => setShowLogModal(false)}
       />
-
-      {showPRs && pendingPRs.length > 0 && (
-        <PrCelebration
-          visible={showPRs}
-          prs={pendingPRs}
-          unit={u}
-          onClose={() => { setShowPRs(false); setPendingPRs([]); }}
-        />
-      )}
 
       <TemplateEditorModal
         visible={!!editTplId}
