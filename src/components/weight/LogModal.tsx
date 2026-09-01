@@ -32,7 +32,20 @@ export function LogModal({ visible, unit, lastWeight, entries, onSave, onClose }
   }, [date]);
 
   return (
-    <AppModal visible={visible} onClose={onClose} title="Registrar peso">
+    <AppModal
+      visible={visible}
+      onClose={onClose}
+      title="Registrar peso"
+      footer={
+        <Btn
+          kind="primary"
+          full
+          onPress={() => onSave(date, round1(Math.min(maxW, Math.max(minW, weight))))}
+        >
+          {existing ? 'Atualizar registro' : 'Salvar registro'}
+        </Btn>
+      }
+    >
       <Field label="Data">
         <StyledInput
           value={date}
@@ -58,10 +71,6 @@ export function LogModal({ visible, unit, lastWeight, entries, onSave, onClose }
           Substituindo o registro já feito para este dia.
         </Text>
       )}
-
-      <Btn kind="primary" full onPress={() => onSave(date, round1(Math.min(maxW, Math.max(minW, weight))))}>
-        {existing ? 'Atualizar registro' : 'Salvar registro'}
-      </Btn>
     </AppModal>
   );
 }

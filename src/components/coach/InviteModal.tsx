@@ -70,8 +70,52 @@ export function InviteModal({ visible, programs, activeCount, loading, error, on
   const selectedProg = programs.find((p) => p.id === programId) ?? null;
   const valid = name.trim().length > 0 && contact.trim().length > 0;
 
+  const footer = (
+    <>
+      {!!error && (
+        <Text style={{ fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 13, color: '#e5484d' }}>
+          {error}
+        </Text>
+      )}
+      <View style={{ flexDirection: 'row', gap: 10 }}>
+        <TouchableOpacity
+          onPress={handleClose}
+          disabled={loading}
+          style={{
+            flex: 1,
+            paddingVertical: 15,
+            borderRadius: radius.cardSm,
+            borderWidth: 1.5,
+            borderColor: colors.line,
+            alignItems: 'center',
+            opacity: loading ? 0.5 : 1,
+          }}
+        >
+          <Text style={{ fontFamily: 'HankenGrotesk_700Bold', fontSize: 15, color: colors.ink2 }}>
+            Cancelar
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={handleSend}
+          disabled={!valid || !!loading}
+          style={{
+            flex: 2,
+            paddingVertical: 15,
+            borderRadius: radius.cardSm,
+            backgroundColor: valid && !loading ? colors.accent : colors.line2,
+            alignItems: 'center',
+          }}
+        >
+          <Text style={{ fontFamily: 'HankenGrotesk_700Bold', fontSize: 15, color: '#fff' }}>
+            {loading ? 'Enviando...' : 'Enviar convite'}
+          </Text>
+        </TouchableOpacity>
+      </View>
+    </>
+  );
+
   return (
-    <AppModal visible={visible} onClose={handleClose} title="Convidar atleta">
+    <AppModal visible={visible} onClose={handleClose} title="Convidar atleta" footer={footer}>
       <View style={{ gap: 18 }}>
             {/* name */}
             <View style={{ gap: 6 }}>
@@ -247,49 +291,6 @@ export function InviteModal({ visible, programs, activeCount, loading, error, on
                 </Text>
               </View>
             )}
-      </View>
-
-      {/* error */}
-      {!!error && (
-        <Text style={{ fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 13, color: '#e5484d' }}>
-          {error}
-        </Text>
-      )}
-
-      {/* actions */}
-      <View style={{ flexDirection: 'row', gap: 10 }}>
-          <TouchableOpacity
-            onPress={handleClose}
-            disabled={loading}
-            style={{
-              flex: 1,
-              paddingVertical: 15,
-              borderRadius: radius.cardSm,
-              borderWidth: 1.5,
-              borderColor: colors.line,
-              alignItems: 'center',
-              opacity: loading ? 0.5 : 1,
-            }}
-          >
-            <Text style={{ fontFamily: 'HankenGrotesk_700Bold', fontSize: 15, color: colors.ink2 }}>
-              Cancelar
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={handleSend}
-            disabled={!valid || !!loading}
-            style={{
-              flex: 2,
-              paddingVertical: 15,
-              borderRadius: radius.cardSm,
-              backgroundColor: valid && !loading ? colors.accent : colors.line2,
-              alignItems: 'center',
-            }}
-          >
-            <Text style={{ fontFamily: 'HankenGrotesk_700Bold', fontSize: 15, color: '#fff' }}>
-              {loading ? 'Enviando...' : 'Enviar convite'}
-            </Text>
-          </TouchableOpacity>
       </View>
     </AppModal>
   );

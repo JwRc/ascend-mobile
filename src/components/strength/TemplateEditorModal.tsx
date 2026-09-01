@@ -103,7 +103,21 @@ export function TemplateEditorModal({ visible, template, onClose, suggestions }:
   if (!template) return null;
 
   return (
-    <AppModal visible={visible} onClose={onClose} title="Editar template">
+    <AppModal
+      visible={visible}
+      onClose={onClose}
+      title="Editar template"
+      footer={
+        <>
+          <Btn kind="primary" full loading={updateTemplate.isPending} onPress={handleSave}>
+            Salvar
+          </Btn>
+          <Btn kind="danger" full onPress={handleDelete}>
+            Excluir template
+          </Btn>
+        </>
+      }
+    >
       <Field label="Nome">
         <StyledInput
           value={name}
@@ -290,14 +304,6 @@ export function TemplateEditorModal({ visible, template, onClose, suggestions }:
           )}
         </View>
       </Field>
-
-      <Btn kind="primary" full loading={updateTemplate.isPending} onPress={handleSave}>
-        Salvar
-      </Btn>
-
-      <Btn kind="danger" full onPress={handleDelete}>
-        Excluir template
-      </Btn>
     </AppModal>
   );
 }

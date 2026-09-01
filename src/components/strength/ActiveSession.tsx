@@ -302,18 +302,20 @@ export function ActiveSession({ active, sessions, unit, onUpdateActive, onFinish
         visible={confirmDiscard}
         onClose={() => setConfirmDiscard(false)}
         title="Descartar treino?"
+        footer={
+          <View style={{ flexDirection: 'row', gap: 10 }}>
+            <Btn kind="ghost" onPress={() => setConfirmDiscard(false)} style={{ flex: 1 }}>
+              Continuar
+            </Btn>
+            <Btn kind="danger" onPress={() => { setConfirmDiscard(false); onDiscard(); }} style={{ flex: 1 }}>
+              Descartar
+            </Btn>
+          </View>
+        }
       >
         <Text style={{ fontFamily: 'HankenGrotesk_500Medium', fontSize: 15, lineHeight: 22, color: colors.ink2 }}>
           As {totalSets} {totalSets === 1 ? 'série' : 'séries'} registradas serão perdidas. Isso não pode ser desfeito.
         </Text>
-        <View style={{ flexDirection: 'row', gap: 10 }}>
-          <Btn kind="ghost" onPress={() => setConfirmDiscard(false)} style={{ flex: 1 }}>
-            Continuar
-          </Btn>
-          <Btn kind="danger" onPress={() => { setConfirmDiscard(false); onDiscard(); }} style={{ flex: 1 }}>
-            Descartar
-          </Btn>
-        </View>
       </AppModal>
     </View>
   );

@@ -32,7 +32,20 @@ export function GoalEditModal({ visible, unit, goal, goalType, onSave, onClose }
   const maxW = unit === 'kg' ? 250 : 550;
 
   return (
-    <AppModal visible={visible} onClose={onClose} title="Editar meta">
+    <AppModal
+      visible={visible}
+      onClose={onClose}
+      title="Editar meta"
+      footer={
+        <Btn
+          kind="primary"
+          full
+          onPress={() => onSave(round1(Math.min(maxW, Math.max(minW, g))), gt)}
+        >
+          Salvar meta
+        </Btn>
+      }
+    >
       <Field label="Treinando para">
         <View style={{ flexDirection: 'row', gap: 8 }}>
           {TYPES.map((t) => (
@@ -78,10 +91,6 @@ export function GoalEditModal({ visible, unit, goal, goalType, onSave, onClose }
       <Text style={{ fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 13, color: colors.ink3 }}>
         Atualizar aqui marca a meta como definida por você.
       </Text>
-
-      <Btn kind="primary" full onPress={() => onSave(round1(Math.min(maxW, Math.max(minW, g))), gt)}>
-        Salvar meta
-      </Btn>
     </AppModal>
   );
 }

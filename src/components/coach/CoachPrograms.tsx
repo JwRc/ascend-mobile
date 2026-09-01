@@ -5,7 +5,6 @@ import {
   ScrollView,
   TextInput,
   TouchableOpacity,
-  FlatList,
   RefreshControl,
 } from 'react-native';
 import { useTheme } from '@/theme';
@@ -36,12 +35,13 @@ const PER_WEEK_OPTIONS = [2, 3, 4, 5, 6];
 // ─── Program builder modal ────────────────────────────────────────────────────
 
 type BuilderProps = {
+  visible: boolean;
   program: CoachProgram | null; // null = new
   onSave: (p: CoachProgram) => void;
   onClose: () => void;
 };
 
-function ProgramBuilder({ program, onSave, onClose }: BuilderProps) {
+function ProgramBuilder({ visible, program, onSave, onClose }: BuilderProps) {
   const { colors, radius } = useTheme();
   const [name, setName] = React.useState(program?.name ?? '');
   const [focus, setFocus] = React.useState(program?.focus ?? 'Hipertrofia');
@@ -89,7 +89,45 @@ function ProgramBuilder({ program, onSave, onClose }: BuilderProps) {
   const valid = name.trim().length > 0 && days.length > 0 && days.every((d) => d.name.trim());
 
   return (
-    <>
+    <AppModal
+      visible={visible}
+      onClose={onClose}
+      title={program ? 'Editar programa' : 'Novo programa'}
+      footer={
+        <View style={{ flexDirection: 'row', gap: 10 }}>
+          <TouchableOpacity
+            onPress={onClose}
+            style={{
+              flex: 1,
+              paddingVertical: 15,
+              borderRadius: radius.cardSm,
+              borderWidth: 1.5,
+              borderColor: colors.line,
+              alignItems: 'center',
+            }}
+          >
+            <Text style={{ fontFamily: 'HankenGrotesk_700Bold', fontSize: 15, color: colors.ink2 }}>
+              Cancelar
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={handleSave}
+            disabled={!valid}
+            style={{
+              flex: 2,
+              paddingVertical: 15,
+              borderRadius: radius.cardSm,
+              backgroundColor: valid ? colors.accent : colors.line2,
+              alignItems: 'center',
+            }}
+          >
+            <Text style={{ fontFamily: 'HankenGrotesk_700Bold', fontSize: 15, color: '#fff' }}>
+              {program ? 'Salvar alterações' : 'Criar programa'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      }
+    >
       <View style={{ gap: 16 }}>
         {/* name */}
         <View style={{ gap: 6 }}>
@@ -308,133 +346,100 @@ function ProgramBuilder({ program, onSave, onClose }: BuilderProps) {
           </TouchableOpacity>
         </View>
       </View>
-
-      {/* actions */}
-      <View style={{ flexDirection: 'row', gap: 10, marginTop: 6 }}>
-        <TouchableOpacity
-          onPress={onClose}
-          style={{
-            flex: 1,
-            paddingVertical: 15,
-            borderRadius: radius.cardSm,
-            borderWidth: 1.5,
-            borderColor: colors.line,
-            alignItems: 'center',
-          }}
-        >
-          <Text style={{ fontFamily: 'HankenGrotesk_700Bold', fontSize: 15, color: colors.ink2 }}>
-            Cancelar
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          onPress={handleSave}
-          disabled={!valid}
-          style={{
-            flex: 2,
-            paddingVertical: 15,
-            borderRadius: radius.cardSm,
-            backgroundColor: valid ? colors.accent : colors.line2,
-            alignItems: 'center',
-          }}
-        >
-          <Text style={{ fontFamily: 'HankenGrotesk_700Bold', fontSize: 15, color: '#fff' }}>
-            {program ? 'Salvar alterações' : 'Criar programa'}
-          </Text>
-        </TouchableOpacity>
-      </View>
-    </>
+    </AppModal>
   );
 }
 
 // ─── Assign modal ─────────────────────────────────────────────────────────────
 
 type AssignModalProps = {
+  visible: boolean;
   program: CoachProgram;
   athletes: CoachAthlete[];
   onAssign: (athleteId: string, programId: string | null) => void;
   onClose: () => void;
 };
 
-function AssignModal({ program, athletes, onAssign, onClose }: AssignModalProps) {
+function AssignModal({ visible, program, athletes, onAssign, onClose }: AssignModalProps) {
   const { colors, radius } = useTheme();
   const activeAthletes = athletes.filter((a) => a.status === 'active');
 
   return (
-    <>
+    <AppModal
+      visible={visible}
+      onClose={onClose}
+      title="Atribuir programa"
+      footer={
+        <TouchableOpacity
+          onPress={onClose}
+          style={{
+            paddingVertical: 15,
+            borderRadius: radius.cardSm,
+            backgroundColor: colors.ink,
+            alignItems: 'center',
+          }}
+        >
+          <Text style={{ fontFamily: 'HankenGrotesk_700Bold', fontSize: 15, color: colors.bg }}>
+            Feito
+          </Text>
+        </TouchableOpacity>
+      }
+    >
       <Text style={{ fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 14, color: colors.ink2 }}>
         Atribuir <Text style={{ fontFamily: 'HankenGrotesk_700Bold', color: colors.ink }}>{program.name}</Text> a atletas.
         Toque para alternar.
       </Text>
-      <View style={{ gap: 2, maxHeight: 360 }}>
-        <FlatList
-          data={activeAthletes}
-          keyExtractor={(a) => a.id}
-          renderItem={({ item: a }) => {
-            const assigned = a.programId === program.id;
-            return (
-              <TouchableOpacity
-                onPress={() => onAssign(a.id, assigned ? null : program.id)}
-                activeOpacity={0.65}
+      <View style={{ gap: 2 }}>
+        {activeAthletes.map((a) => {
+          const assigned = a.programId === program.id;
+          return (
+            <TouchableOpacity
+              key={a.id}
+              onPress={() => onAssign(a.id, assigned ? null : program.id)}
+              activeOpacity={0.65}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                paddingVertical: 13,
+                gap: 12,
+                borderBottomWidth: 1,
+                borderBottomColor: colors.line,
+              }}
+            >
+              <View
                 style={{
-                  flexDirection: 'row',
+                  width: 34,
+                  height: 34,
+                  borderRadius: 17,
+                  backgroundColor: assigned ? colors.accent : colors.surface2,
+                  borderWidth: 1.5,
+                  borderColor: assigned ? colors.accent : colors.line,
                   alignItems: 'center',
-                  paddingVertical: 13,
-                  gap: 12,
-                  borderBottomWidth: 1,
-                  borderBottomColor: colors.line,
+                  justifyContent: 'center',
                 }}
               >
-                <View
-                  style={{
-                    width: 34,
-                    height: 34,
-                    borderRadius: 17,
-                    backgroundColor: assigned ? colors.accent : colors.surface2,
-                    borderWidth: 1.5,
-                    borderColor: assigned ? colors.accent : colors.line,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  <Text style={{ fontFamily: 'Archivo_800ExtraBold', fontSize: 13, color: assigned ? '#fff' : colors.ink }}>
-                    {a.name.slice(0, 1)}
+                <Text style={{ fontFamily: 'Archivo_800ExtraBold', fontSize: 13, color: assigned ? '#fff' : colors.ink }}>
+                  {a.name.slice(0, 1)}
+                </Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontFamily: 'HankenGrotesk_700Bold', fontSize: 14, color: colors.ink }}>
+                  {a.name}
+                </Text>
+                {a.programName && !assigned && (
+                  <Text style={{ fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 12, color: colors.ink3 }}>
+                    Em: {a.programName}
                   </Text>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontFamily: 'HankenGrotesk_700Bold', fontSize: 14, color: colors.ink }}>
-                    {a.name}
-                  </Text>
-                  {a.programName && !assigned && (
-                    <Text style={{ fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 12, color: colors.ink3 }}>
-                      Em: {a.programName}
-                    </Text>
-                  )}
-                </View>
-                {assigned && (
-                  <Text style={{ fontFamily: 'HankenGrotesk_700Bold', fontSize: 13, color: colors.accent }}>✓ Atribuído</Text>
                 )}
-              </TouchableOpacity>
-            );
-          }}
-          showsVerticalScrollIndicator={false}
-          nestedScrollEnabled
-        />
+              </View>
+              {assigned && (
+                <Text style={{ fontFamily: 'HankenGrotesk_700Bold', fontSize: 13, color: colors.accent }}>✓ Atribuído</Text>
+              )}
+            </TouchableOpacity>
+          );
+        })}
       </View>
-      <TouchableOpacity
-        onPress={onClose}
-        style={{
-          paddingVertical: 15,
-          borderRadius: radius.cardSm,
-          backgroundColor: colors.ink,
-          alignItems: 'center',
-          marginTop: 6,
-        }}
-      >
-        <Text style={{ fontFamily: 'HankenGrotesk_700Bold', fontSize: 15, color: colors.bg }}>
-          Feito
-        </Text>
-      </TouchableOpacity>
-    </>
+    </AppModal>
   );
 }
 
@@ -645,32 +650,25 @@ export function CoachPrograms({
       )}
 
       {/* builder modal */}
-      <AppModal
-        visible={builderOpen}
-        onClose={() => { setBuilderOpen(false); setEditingProgram(null); }}
-        title={editingProgram ? 'Editar programa' : 'Novo programa'}
-      >
+      {builderOpen && (
         <ProgramBuilder
+          key={editingProgram?.id ?? 'new'}
+          visible={builderOpen}
           program={editingProgram}
           onSave={handleSave}
           onClose={() => { setBuilderOpen(false); setEditingProgram(null); }}
         />
-      </AppModal>
+      )}
 
       {/* assign modal */}
       {assigningProgram && (
-        <AppModal
+        <AssignModal
           visible={!!assigningProgram}
+          program={assigningProgram}
+          athletes={athletes}
+          onAssign={onAssignProgram}
           onClose={() => setAssigningProgram(null)}
-          title="Atribuir programa"
-        >
-          <AssignModal
-            program={assigningProgram}
-            athletes={athletes}
-            onAssign={onAssignProgram}
-            onClose={() => setAssigningProgram(null)}
-          />
-        </AppModal>
+        />
       )}
     </ScrollView>
   );

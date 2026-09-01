@@ -1,5 +1,14 @@
 import React from 'react';
-import { Modal, View, Text, TouchableOpacity, Share } from 'react-native';
+import {
+  Modal,
+  View,
+  Text,
+  TouchableOpacity,
+  Share,
+  ScrollView,
+  useWindowDimensions,
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Sharing from 'expo-sharing';
 import type { ViewShotRef } from 'react-native-view-shot';
 import { useTheme } from '@/theme';
@@ -24,8 +33,13 @@ type Props = {
 
 export function PrCelebration({ visible, prs, unit, onClose }: Props) {
   const { colors, radius } = useTheme();
+  const insets = useSafeAreaInsets();
+  const { height: screenH } = useWindowDimensions();
   const shotRef = React.useRef<ViewShotRef>(null);
   const [sharing, setSharing] = React.useState(false);
+
+  // Card limitado a ~92% da altura útil da tela; lista de PRs rola internamente.
+  const maxCardHeight = Math.max(240, (screenH - insets.top - insets.bottom) * 0.92);
 
   async function shareAsText() {
     const lines = prs.map(
@@ -86,10 +100,13 @@ export function PrCelebration({ visible, prs, unit, onClose }: Props) {
           flex: 1,
           backgroundColor: 'rgba(0,0,0,0.5)',
           justifyContent: 'center',
-          padding: 16,
+          alignItems: 'center',
+          paddingHorizontal: 16,
+          paddingTop: insets.top + 16,
+          paddingBottom: insets.bottom + 16,
         }}
       >
-        <TouchableOpacity activeOpacity={1}>
+        <TouchableOpacity activeOpacity={1} style={{ width: '100%', maxWidth: 480 }}>
           <View
             style={{
               backgroundColor: colors.surface,
@@ -97,7 +114,7 @@ export function PrCelebration({ visible, prs, unit, onClose }: Props) {
               borderColor: colors.line,
               borderRadius: radius.card,
               overflow: 'hidden',
-              gap: 20,
+              maxHeight: maxCardHeight,
             }}
           >
             {/* accent header */}
@@ -134,7 +151,12 @@ export function PrCelebration({ visible, prs, unit, onClose }: Props) {
             </View>
 
             {/* PR list */}
-            <View style={{ paddingHorizontal: 24, gap: 0 }}>
+            <ScrollView
+              style={{ flexGrow: 0, flexShrink: 1 }}
+              contentContainerStyle={{ paddingHorizontal: 24, paddingVertical: 20 }}
+              showsVerticalScrollIndicator={false}
+              bounces={false}
+            >
               {prs.map((p, i) => (
                 <View
                   key={i}
@@ -187,10 +209,20 @@ export function PrCelebration({ visible, prs, unit, onClose }: Props) {
                   </View>
                 </View>
               ))}
-            </View>
+            </ScrollView>
 
-            {/* action */}
-            <View style={{ paddingHorizontal: 24, paddingBottom: 24, gap: 10 }}>
+            {/* action (rodapé fixo) */}
+            <View
+              style={{
+                paddingHorizontal: 24,
+                paddingTop: 16,
+                paddingBottom: 24,
+                gap: 10,
+                borderTopWidth: 1,
+                borderTopColor: colors.line,
+                backgroundColor: colors.surface,
+              }}
+            >
               <Btn kind="ghost" full onPress={handleShare} loading={sharing} disabled={sharing}>
                 Compartilhar ↗
               </Btn>

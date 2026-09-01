@@ -59,8 +59,46 @@ export function NewTicketModal({ visible, onClose, onCreated }: Props) {
     color: colors.ink3,
   };
 
+  const actions = (
+    <View style={{ flexDirection: 'row', gap: 10 }}>
+      <TouchableOpacity
+        onPress={onClose}
+        disabled={createTicket.isPending}
+        style={{
+          flex: 1,
+          paddingVertical: 15,
+          borderRadius: radius.cardSm,
+          borderWidth: 1.5,
+          borderColor: colors.line,
+          alignItems: 'center',
+          opacity: createTicket.isPending ? 0.5 : 1,
+        }}
+      >
+        <Text style={{ fontFamily: 'HankenGrotesk_700Bold', fontSize: 15, color: colors.ink2 }}>
+          Cancelar
+        </Text>
+      </TouchableOpacity>
+      <TouchableOpacity
+        onPress={handleSubmit}
+        disabled={createTicket.isPending}
+        style={{
+          flex: 2,
+          paddingVertical: 15,
+          borderRadius: radius.cardSm,
+          backgroundColor: colors.accent,
+          alignItems: 'center',
+          opacity: createTicket.isPending ? 0.6 : 1,
+        }}
+      >
+        <Text style={{ fontFamily: 'HankenGrotesk_700Bold', fontSize: 15, color: '#fff' }}>
+          {createTicket.isPending ? 'Enviando…' : 'Abrir ticket'}
+        </Text>
+      </TouchableOpacity>
+    </View>
+  );
+
   return (
-    <AppModal visible={visible} onClose={onClose} title="Abrir ticket">
+    <AppModal visible={visible} onClose={onClose} title="Abrir ticket" footer={actions}>
       <View style={{ gap: 6 }}>
         <Text style={labelStyle}>Assunto</Text>
         <TextInput
@@ -90,42 +128,6 @@ export function NewTicketModal({ visible, onClose, onCreated }: Props) {
           {err}
         </Text>
       )}
-
-      <View style={{ flexDirection: 'row', gap: 10 }}>
-        <TouchableOpacity
-          onPress={onClose}
-          disabled={createTicket.isPending}
-          style={{
-            flex: 1,
-            paddingVertical: 15,
-            borderRadius: radius.cardSm,
-            borderWidth: 1.5,
-            borderColor: colors.line,
-            alignItems: 'center',
-            opacity: createTicket.isPending ? 0.5 : 1,
-          }}
-        >
-          <Text style={{ fontFamily: 'HankenGrotesk_700Bold', fontSize: 15, color: colors.ink2 }}>
-            Cancelar
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          onPress={handleSubmit}
-          disabled={createTicket.isPending}
-          style={{
-            flex: 2,
-            paddingVertical: 15,
-            borderRadius: radius.cardSm,
-            backgroundColor: colors.accent,
-            alignItems: 'center',
-            opacity: createTicket.isPending ? 0.6 : 1,
-          }}
-        >
-          <Text style={{ fontFamily: 'HankenGrotesk_700Bold', fontSize: 15, color: '#fff' }}>
-            {createTicket.isPending ? 'Enviando…' : 'Abrir ticket'}
-          </Text>
-        </TouchableOpacity>
-      </View>
     </AppModal>
   );
 }
