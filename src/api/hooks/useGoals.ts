@@ -2,6 +2,9 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../client';
 import type { Goal } from '../../types/api';
 import { capture } from '../../lib/analytics';
+import { isNetworkError } from '../../lib/net';
+import { queueSetGoal } from '../../lib/offline-queue';
+import { useAuthStore } from '../../store/auth.store';
 
 export function useActiveGoal() {
   return useQuery({
@@ -17,8 +20,14 @@ export function useSetGoal() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ targetWeight, goalType }: { targetWeight: number; goalType: 'LOSE' | 'GAIN' | 'MAINTAIN' }) => {
-      const res = await api.post<Goal>('/goals', { targetWeight, goalType });
-      return res.data;
+      try {
+        const res = await api.post<Goal>('/goals', { targetWeight, goalType });
+        return res.data;
+      } catch (err) {
+        const userId = useAuthStore.getState().userId;
+        if (!isNetworkError(err) || !userId) throw err;
+        return queueSetGoal(qc, userId, { targetWeight, goalType });
+      }
     },
     onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ['goals', 'active'] });

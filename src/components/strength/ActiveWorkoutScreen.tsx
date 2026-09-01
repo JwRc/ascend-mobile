@@ -13,10 +13,11 @@ import { useStudentProfile } from '@/api/hooks/useStudentProfile';
 import { useWorkouts } from '@/api/hooks/useWorkouts';
 import { useSyncWorkoutSession, useDiscardWorkoutSession } from '@/api/hooks/useWorkoutSession';
 import { useStrengthStore } from '@/store/strength.store';
+import { buildWorkoutSnapshot, flushPendingWorkout } from '@/lib/workout-sync';
 import { round1 } from '@/lib/utils';
 import { debounce } from '@/lib/debounce';
 import { capture } from '@/lib/analytics';
-import type { WorkoutSessionSnapshot, WorkoutSessionSyncResult, WorkoutStatus, Workout } from '@/types/api';
+import type { WorkoutSessionSyncResult, Workout } from '@/types/api';
 import type { ActiveSession as ActiveSessionType, Session, SetType, WorkSet } from '@/store/strength.store';
 
 function workoutToSession(w: Workout): Session {
@@ -88,32 +89,7 @@ export function ActiveWorkoutScreen({ homeHref }: { homeHref: '/(app)' | '/(coac
     [forStudent, workoutsRaw],
   );
 
-  function buildSnapshot(session: ActiveSessionType, status: WorkoutStatus): WorkoutSessionSnapshot {
-    const live = session.startedAt
-      ? Math.max(0, Math.floor((Date.now() - session.startedAt) / 1000))
-      : 0;
-    return {
-      performedAt: new Date(session.date + 'T12:00:00').toISOString(),
-      durationSec: (session.accumulatedSec || 0) + live,
-      templateId: session.templateId,
-      templateName: session.templateName,
-      programId: session.programId,
-      programName: session.programName,
-      status,
-      exercises: session.exercises
-        .filter((ex) => ex.sets.length > 0)
-        .map((ex) => ({
-          name: ex.name,
-          sets: ex.sets.map((s, i) => ({
-            clientSetId: s.id,
-            setNumber: i + 1,
-            setType: (s.type?.toUpperCase() ?? 'WORK') as WorkoutSessionSnapshot['exercises'][0]['sets'][0]['setType'],
-            reps: s.reps,
-            weight: s.weight,
-          })),
-        })),
-    };
-  }
+  const buildSnapshot = buildWorkoutSnapshot;
 
   function handleSyncResult(result: WorkoutSessionSyncResult) {
     if (result.newPRs.length > 0) {
@@ -154,11 +130,21 @@ export function ActiveWorkoutScreen({ homeHref }: { homeHref: '/(app)' | '/(coac
   React.useEffect(() => {
     const unsub = NetInfo.addEventListener((state) => {
       if (!state.isConnected || !activeSession) return;
-      const hasContent = activeSession.exercises.some((e) => e.sets.length > 0);
-      if (hasContent) debouncedSync(activeSession);
+      // A finalização (status COMPLETED) é escoada pelo <OfflineSync> global; aqui
+      // só o checkpoint do treino em andamento, que ainda mostra a celebração de PR.
+      if (activeSession.status === 'COMPLETED') return;
+      if (activeSession.exercises.some((e) => e.sets.length > 0)) debouncedSync(activeSession);
     });
     return unsub;
   }, [activeSession, debouncedSync]);
+
+  // Sessão retomada já em COMPLETED (a finalização anterior falhou offline) — tenta
+  // fechar assim que a tela montar. Se ainda estiver sem rede, segue pendente e o
+  // <OfflineSync> global reenvia na reconexão.
+  React.useEffect(() => {
+    if (activeSession?.status === 'COMPLETED') void flushPendingWorkout(queryClient);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function finishSession() {
     if (!activeSession) return;
@@ -197,9 +183,10 @@ export function ActiveWorkoutScreen({ homeHref }: { homeHref: '/(app)' | '/(coac
       }
       safeBack();
     } catch {
-      // offline: a sessão com status COMPLETED continua persistida em disco; o listener
-      // de reconexão acima reenvia automaticamente quando a rede voltar. Sai da tela
-      // otimisticamente — não faz sentido prender o usuário esperando a rede.
+      // offline: a sessão com status COMPLETED continua persistida em disco e é
+      // reenviada automaticamente pelo <OfflineSync> global (ou pelo efeito de
+      // mount desta tela) quando a rede voltar. Sai da tela otimisticamente —
+      // não faz sentido prender o usuário esperando a rede.
       safeBack();
     }
   }

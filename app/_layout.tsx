@@ -30,7 +30,11 @@ import {
   parseRememberMeJwt,
   isRememberMeValid,
   refreshRememberMeToken,
+  clearToken,
+  clearRememberMeToken,
 } from '@/lib/auth';
+import { stashOrphanedWorkout } from '@/lib/orphaned-session';
+import { OfflineSync } from '@/components/OfflineSync';
 import { StripeProvider } from '@stripe/stripe-react-native';
 import { PostHogProvider } from 'posthog-react-native';
 import { posthog, identify } from '@/lib/analytics';
@@ -117,9 +121,17 @@ function BootScreen({ accent }: { accent: string }) {
 
 const queryClient = new QueryClient({
   defaultOptions: {
+    // networkMode 'always': queries/mutations sempre executam (mesmo offline) e
+    // falham rápido, servindo o cache — o comportamento que o app já tinha. O
+    // onlineManager (ligado ao NetInfo em @/lib/offline-sync) continua disparando
+    // o refetch automático das queries stale quando a conexão volta.
     queries: {
       retry: 1,
       staleTime: 1000 * 60 * 5,
+      networkMode: 'always',
+    },
+    mutations: {
+      networkMode: 'always',
     },
   },
 });
@@ -213,6 +225,14 @@ export default function RootLayout() {
             void registerPushToken();
             return;
           }
+          if (claims) {
+            // Janela offline (7 dias) vencida — expira a sessão localmente. Preserva
+            // um treino ainda não sincronizado sob o userId pra ressincronizar no
+            // próximo login, e limpa os tokens pra não retentar no próximo boot.
+            await stashOrphanedWorkout(claims.userId);
+          }
+          await clearToken();
+          await clearRememberMeToken();
         }
       } catch {
         // JWT corrompido ou expirado
@@ -250,6 +270,7 @@ export default function RootLayout() {
                 <Stack.Screen name="(billing)" />
               </Stack>
               <GlobalPrCelebration />
+              <OfflineSync />
             </ThemeContext.Provider>
           </QueryClientProvider>
         </SafeAreaProvider>

@@ -1,6 +1,8 @@
 import { create } from "zustand";
 import { clearToken, clearRememberMeToken } from "@/lib/auth";
 import { deregisterPushToken } from "@/lib/notifications";
+import { stashOrphanedWorkout } from "@/lib/orphaned-session";
+import { useStrengthStore } from "@/store/strength.store";
 
 export type UserRole = "STUDENT" | "COACH";
 
@@ -33,7 +35,7 @@ type AuthState = {
   setSubscriptionExpired: (val: boolean) => void;
 };
 
-export const useAuthStore = create<AuthState>((set) => ({
+export const useAuthStore = create<AuthState>((set, get) => ({
   isAuthenticated: false,
   hydrated: false,
   userId: null,
@@ -61,6 +63,11 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   clearSession: async () => {
     console.log("Clearing session...");
+    // Preserva um treino ainda não sincronizado (marcado com o userId) antes de
+    // limpar, e zera o activeSession em memória pra não vazar pra outra conta no
+    // mesmo aparelho. A cópia órfã é ressincronizada no próximo login do usuário.
+    await stashOrphanedWorkout(get().userId);
+    useStrengthStore.getState().setActiveSession(null);
     await deregisterPushToken();
     await clearToken();
     await clearRememberMeToken();
