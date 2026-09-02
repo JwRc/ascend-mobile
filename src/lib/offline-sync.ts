@@ -10,13 +10,21 @@ function isOnline(state: { isConnected: boolean | null; isInternetReachable: boo
   return !!state.isConnected && state.isInternetReachable !== false;
 }
 
+let onlineManagerWired = false;
+
 /**
- * Faz o React Query pausar queries/mutations quando o aparelho está offline e
- * refazer o fetch sozinho ao reconectar. Registrado uma única vez, no import.
+ * Liga o onlineManager do React Query ao NetInfo — o refetch automático das queries
+ * volta a acontecer quando a conexão retorna. Idempotente; deve ser chamado só
+ * depois que a ponte nativa subiu (de dentro de um componente), nunca no import,
+ * pra não acessar o módulo nativo cedo demais.
  */
-onlineManager.setEventListener((setOnline) =>
-  NetInfo.addEventListener((state) => setOnline(isOnline(state))),
-);
+export function wireOnlineManager() {
+  if (onlineManagerWired) return;
+  onlineManagerWired = true;
+  onlineManager.setEventListener((setOnline) =>
+    NetInfo.addEventListener((state) => setOnline(isOnline(state))),
+  );
+}
 
 /**
  * Roda toda vez que a rede volta com um usuário autenticado, e uma vez logo após

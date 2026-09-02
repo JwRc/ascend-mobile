@@ -1,0 +1,36 @@
+{
+  // Debug do app (Hermes / RN 0.85 / Expo SDK 56) via extensão "React Native Tools"
+  // (msjsdiag.vscode-react-native). O app usa expo-dev-client, então é preciso ter
+  // um dev build instalado no device/emulador (npx expo run:android | run:ios).
+  "version": "0.2.0",
+  "configurations": [
+    {
+      // Fluxo recomendado:
+      //  1. terminal: npx expo start --dev-client
+      //  2. abrir o app no device/emulador
+      //  3. F5 aqui e escolher o app na lista
+      "name": "Attach ao Metro (Hermes)",
+      "type": "reactnative",
+      "request": "attach",
+      "cwd": "${workspaceFolder}",
+      "hostname": "localhost",
+      "port": 8081
+    },
+    {
+      "name": "Debug Android (Expo dev client)",
+      "type": "reactnative",
+      "request": "launch",
+      "cwd": "${workspaceFolder}",
+      "platform": "android",
+      "expoHostType": "local"
+    },
+    {
+      "name": "Debug iOS (Expo dev client)",
+      "type": "reactnative",
+      "request": "launch",
+      "cwd": "${workspaceFolder}",
+      "platform": "ios",
+      "expoHostType": "local"
+    }
+  ]
+}

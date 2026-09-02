@@ -2,7 +2,7 @@ import React from 'react';
 import NetInfo from '@react-native-community/netinfo';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '@/store/auth.store';
-import { onAuthenticated, runOfflineSync, isOnline } from '@/lib/offline-sync';
+import { onAuthenticated, runOfflineSync, isOnline, wireOnlineManager } from '@/lib/offline-sync';
 
 /**
  * Sem UI. Montado uma vez no root layout (dentro do QueryClientProvider). Escoa as
@@ -13,6 +13,10 @@ export function OfflineSync() {
   const userId = useAuthStore((s) => s.userId);
   const wasOnline = React.useRef<boolean | null>(null);
   const handledUser = React.useRef<string | null>(null);
+
+  React.useEffect(() => {
+    wireOnlineManager();
+  }, []);
 
   // uma vez por usuário autenticado
   React.useEffect(() => {
