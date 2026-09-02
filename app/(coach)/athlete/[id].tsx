@@ -5,7 +5,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useTheme } from '@/theme';
 import { AthleteDetail } from '@/components/coach/AthleteDetail';
 import { StudentOwnSection } from '@/components/coach/StudentOwnSection';
-import { useStudentById, useUpdateStudentGoal, useAssignStudentProgram, useUpdateStudentNotes, useRemoveStudent } from '@/api/hooks/useStudents';
+import { useStudentById, useStudents, useUpdateStudentGoal, useAssignStudentProgram, useUpdateStudentNotes, useRemoveStudent } from '@/api/hooks/useStudents';
 import { usePrograms } from '@/api/hooks/usePrograms';
 import { useInvites, useRevokeInvite, useResendInvite } from '@/api/hooks/useInvites';
 import type { CoachAthlete, CoachProgram, Flag } from '@/store/coach.store';
@@ -53,7 +53,10 @@ export default function AthleteDetailScreen() {
   const router = useRouter();
   const { colors } = useTheme();
 
-  const { data: studentRaw, isLoading: studentLoading } = useStudentById(id ?? '');
+  const { data: studentByIdRaw, isLoading: studentLoading } = useStudentById(id ?? '');
+  const { data: roster = [] } = useStudents();
+  // Offline sem cache do detalhe: cai no item já carregado na lista do roster.
+  const studentRaw = studentByIdRaw ?? roster.find((s) => s.id === id);
   const { data: programsRaw = [] } = usePrograms();
   const { data: invites = [] } = useInvites();
 
@@ -104,7 +107,7 @@ export default function AthleteDetailScreen() {
     });
   }
 
-  if (studentLoading) {
+  if (studentLoading && !studentRaw) {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg, justifyContent: 'center', alignItems: 'center' }}>
         <ActivityIndicator color={colors.accent} />

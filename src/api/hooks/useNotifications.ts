@@ -1,5 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../client';
+import { isNetworkError } from '../../lib/net';
+import { useAuthStore } from '../../store/auth.store';
+import { queueNotifRead, queueNotifReadAll } from '../../lib/offline-queue';
 
 export type Notification = {
   id: string;
@@ -23,7 +26,15 @@ export function useNotifications() {
 export function useMarkNotificationRead() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => api.patch(`/notify/${id}/read`),
+    mutationFn: async (id: string) => {
+      try {
+        await api.patch(`/notify/${id}/read`);
+      } catch (err) {
+        const userId = useAuthStore.getState().userId;
+        if (!isNetworkError(err) || !userId) throw err;
+        await queueNotifRead(qc, userId, id);
+      }
+    },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['notifications'] }),
   });
 }
@@ -31,7 +42,15 @@ export function useMarkNotificationRead() {
 export function useMarkAllNotificationsRead() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: () => api.patch('/notify/read-all'),
+    mutationFn: async () => {
+      try {
+        await api.patch('/notify/read-all');
+      } catch (err) {
+        const userId = useAuthStore.getState().userId;
+        if (!isNetworkError(err) || !userId) throw err;
+        await queueNotifReadAll(qc, userId);
+      }
+    },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['notifications'] }),
   });
 }

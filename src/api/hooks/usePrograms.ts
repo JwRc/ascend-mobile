@@ -1,6 +1,31 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../client';
 import type { Program } from '../../types/api';
+import { isNetworkError } from '../../lib/net';
+import { useAuthStore } from '../../store/auth.store';
+import {
+  queueCreateProgram,
+  queueUpdateProgram,
+  queueDeleteProgram,
+} from '../../lib/offline-queue';
+
+type ProgramBody = {
+  name: string;
+  focus: string;
+  perWeek: number;
+  notes: string;
+  days: Program['days'];
+};
+
+function toBody(input: { name: string; focus?: string; perWeek: number; notes?: string; days: Program['days'] }): ProgramBody {
+  return {
+    name: input.name,
+    focus: input.focus ?? '',
+    perWeek: input.perWeek,
+    notes: input.notes ?? '',
+    days: input.days,
+  };
+}
 
 export function usePrograms() {
   return useQuery({
@@ -30,9 +55,16 @@ export function useAssignedProgram() {
 export function useCreateProgram() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (body: Omit<Program, 'id' | 'assignedCount'>) => {
-      const res = await api.post<Program>('/programs', body);
-      return res.data;
+    mutationFn: async (input: Omit<Program, 'id' | 'assignedCount'>) => {
+      const body = toBody(input);
+      try {
+        const res = await api.post<Program>('/programs', body);
+        return res.data;
+      } catch (err) {
+        const userId = useAuthStore.getState().userId;
+        if (!isNetworkError(err) || !userId) throw err;
+        return queueCreateProgram(qc, userId, body);
+      }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['programs'] });
@@ -43,9 +75,16 @@ export function useCreateProgram() {
 export function useUpdateProgram() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, ...body }: Omit<Program, 'assignedCount'>) => {
-      const res = await api.patch<Program>(`/programs/${id}`, body);
-      return res.data;
+    mutationFn: async ({ id, ...input }: Omit<Program, 'assignedCount'>) => {
+      const body = toBody(input);
+      try {
+        const res = await api.patch<Program>(`/programs/${id}`, body);
+        return res.data;
+      } catch (err) {
+        const userId = useAuthStore.getState().userId;
+        if (!isNetworkError(err) || !userId) throw err;
+        await queueUpdateProgram(qc, userId, { programId: id, body });
+      }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['programs'] });
@@ -57,7 +96,13 @@ export function useDeleteProgram() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      await api.delete(`/programs/${id}`);
+      try {
+        await api.delete(`/programs/${id}`);
+      } catch (err) {
+        const userId = useAuthStore.getState().userId;
+        if (!isNetworkError(err) || !userId) throw err;
+        await queueDeleteProgram(qc, userId, id);
+      }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['programs'] });

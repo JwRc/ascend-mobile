@@ -22,6 +22,8 @@ import {
   useCancelSubscription,
 } from '@/api/hooks/useBilling';
 import { useAuthStore } from '@/store/auth.store';
+import { useOnline } from '@/lib/useOnline';
+import { OnlineOnlyNotice } from '@/components/shared/OnlineOnlyNotice';
 
 function Badge({ label, active }: { label: string; active: boolean }) {
   const { colors, radius } = useTheme();
@@ -51,6 +53,7 @@ function Badge({ label, active }: { label: string; active: boolean }) {
 
 export default function BillingScreen() {
   const { colors, radius } = useTheme();
+  const online = useOnline();
   const { role, subscriptionExpired, setSubscriptionExpired } = useAuthStore();
 
   const { data: cards, isLoading: cardsLoading } = useCards();
@@ -94,6 +97,15 @@ export default function BillingScreen() {
   function goToDashboard() {
     setSubscriptionExpired(false);
     router.replace(role === 'COACH' ? '/(coach)' : '/(app)');
+  }
+
+  if (!online && !cards) {
+    return (
+      <OnlineOnlyNotice
+        title="Assinatura precisa de conexão"
+        message="A gestão de pagamento e assinatura depende de internet. Tente novamente quando estiver online."
+      />
+    );
   }
 
   return (

@@ -14,6 +14,7 @@ import { InviteModal } from '@/components/coach/InviteModal';
 import { useAuthStore } from '@/store/auth.store';
 import { useStrengthStore } from '@/store/strength.store';
 import { authClient } from '@/lib/auth';
+import { useOnline } from '@/lib/useOnline';
 import { resetAnalytics } from '@/lib/analytics';
 import {
   type CoachAthlete,
@@ -99,6 +100,7 @@ export default function CoachHomeScreen() {
   const { colors } = useTheme();
   const router = useRouter();
   const queryClient = useQueryClient();
+  const isOnline = useOnline();
   const { clearSession, name: coachName, email: coachEmail } = useAuthStore();
   const coachInitial = (coachName?.trim()?.[0] ?? coachEmail?.trim()?.[0] ?? '?').toUpperCase();
 
@@ -229,7 +231,10 @@ export default function CoachHomeScreen() {
     });
   }
 
-  const isLoading = dashLoading || studentsLoading || programsLoading;
+  // Só bloqueia quando não há nada em cache. Com o cache persistido isso quase
+  // nunca acontece depois da primeira sync.
+  const hasCache = !!dashboard || studentsRaw.length > 0 || programsRaw.length > 0;
+  const isLoading = (dashLoading || studentsLoading || programsLoading) && !hasCache;
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }}>
@@ -402,8 +407,14 @@ export default function CoachHomeScreen() {
 
       {/* ── Content ──────────────────────────────────────────────────── */}
       {isLoading ? (
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-          <ActivityIndicator color={colors.accent} />
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 }}>
+          {isOnline ? (
+            <ActivityIndicator color={colors.accent} />
+          ) : (
+            <Text style={{ fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 14, color: colors.ink3, textAlign: 'center', lineHeight: 20 }}>
+              Sem conexão e sem dados salvos ainda.{'\n'}Conecte-se uma vez para usar o app offline.
+            </Text>
+          )}
         </View>
       ) : (
         <View style={{ flex: 1 }}>
@@ -449,7 +460,13 @@ export default function CoachHomeScreen() {
         onInvite={handleInvite}
         onClose={() => setInviteOpen(false)}
         loading={createInvite.isPending}
-        error={createInvite.error ? (createInvite.error as any)?.response?.data?.message ?? 'Erro ao enviar convite.' : null}
+        error={
+          createInvite.error
+            ? (createInvite.error as any)?.response
+              ? (createInvite.error as any).response?.data?.message ?? 'Erro ao enviar convite.'
+              : 'Convites precisam de conexão com a internet.'
+            : null
+        }
       />
     </SafeAreaView>
   );

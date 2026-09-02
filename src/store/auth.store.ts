@@ -3,6 +3,9 @@ import { clearToken, clearRememberMeToken } from "@/lib/auth";
 import { deregisterPushToken } from "@/lib/notifications";
 import { stashOrphanedWorkout } from "@/lib/orphaned-session";
 import { useStrengthStore } from "@/store/strength.store";
+import { queryClient } from "@/lib/query-client";
+import { clearPersistedCache } from "@/lib/query-persist";
+import { saveLastUser, clearLastUser } from "@/lib/last-user";
 
 export type UserRole = "STUDENT" | "COACH";
 
@@ -48,7 +51,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   isOfflineSession: false,
   subscriptionExpired: false,
 
-  setSession: (userId, email, role, opts) =>
+  setSession: (userId, email, role, opts) => {
+    // Guarda {userId, name} pro cold start offline mostrar o nome certo antes da
+    // rede voltar (o JWT remember-me não carrega name). Só quando temos um name.
+    if (opts?.name) void saveLastUser({ userId, name: opts.name });
     set({
       isAuthenticated: true,
       userId,
@@ -59,7 +65,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       plan: opts?.plan ?? null,
       offlineGraceUntil: opts?.offlineGraceUntil ?? null,
       isOfflineSession: opts?.isOfflineSession ?? false,
-    }),
+    });
+  },
 
   clearSession: async () => {
     console.log("Clearing session...");
@@ -71,6 +78,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     await deregisterPushToken();
     await clearToken();
     await clearRememberMeToken();
+    // Zera o cache do React Query (memória + disco) e o marcador de última conta
+    // pra nenhum dado desta conta aparecer num login seguinte de outra conta.
+    queryClient.clear();
+    await clearPersistedCache();
+    await clearLastUser();
     set({
       isAuthenticated: false,
       userId: null,

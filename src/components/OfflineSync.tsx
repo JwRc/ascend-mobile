@@ -3,6 +3,7 @@ import NetInfo from '@react-native-community/netinfo';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '@/store/auth.store';
 import { onAuthenticated, runOfflineSync, isOnline, wireOnlineManager } from '@/lib/offline-sync';
+import { refreshPendingCount } from '@/lib/offline-queue';
 
 /**
  * Sem UI. Montado uma vez no root layout (dentro do QueryClientProvider). Escoa as
@@ -16,6 +17,7 @@ export function OfflineSync() {
 
   React.useEffect(() => {
     wireOnlineManager();
+    void refreshPendingCount();
   }, []);
 
   // uma vez por usuário autenticado

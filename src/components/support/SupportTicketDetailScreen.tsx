@@ -4,6 +4,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { useTheme } from '@/theme';
 import { useSupportTicket, useReplyToTicket, useCloseTicket } from '@/api/hooks/useSupportTickets';
+import { useOnline } from '@/lib/useOnline';
+import { OnlineOnlyNotice } from '@/components/shared/OnlineOnlyNotice';
 import { TicketStatusPill, isTicketClosed } from './TicketStatusPill';
 import { SendIcon } from '@/components/shared/SendIcon';
 
@@ -16,11 +18,21 @@ type Props = { ticketId: string };
 
 export function SupportTicketDetailScreen({ ticketId }: Props) {
   const { colors, direction } = useTheme();
+  const online = useOnline();
   const { data: ticket, isError, isLoading } = useSupportTicket(ticketId);
   const replyToTicket = useReplyToTicket(ticketId);
   const closeTicket = useCloseTicket(ticketId);
   const [message, setMessage] = React.useState('');
   const scrollRef = React.useRef<ScrollView>(null);
+
+  if (!online && !ticket) {
+    return (
+      <OnlineOnlyNotice
+        title="Suporte precisa de conexão"
+        message="Os detalhes e respostas do ticket dependem de internet. Tente novamente quando estiver online."
+      />
+    );
+  }
 
   async function handleSend() {
     if (!message.trim() || replyToTicket.isPending) return;

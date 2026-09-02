@@ -1,10 +1,11 @@
 import { onlineManager, type QueryClient } from '@tanstack/react-query';
 import NetInfo from '@react-native-community/netinfo';
 import { refreshRememberMeToken } from '@/lib/auth';
-import { flushOfflineQueue } from '@/lib/offline-queue';
+import { flushOfflineQueue, refreshPendingCount } from '@/lib/offline-queue';
 import { flushPendingWorkout, flushOrphanedWorkout } from '@/lib/workout-sync';
 import { peekOrphanedWorkout, clearOrphanedWorkout } from '@/lib/orphaned-session';
 import { useStrengthStore } from '@/store/strength.store';
+import { useSyncStore } from '@/store/sync.store';
 
 function isOnline(state: { isConnected: boolean | null; isInternetReachable: boolean | null }) {
   return !!state.isConnected && state.isInternetReachable !== false;
@@ -32,9 +33,15 @@ export function wireOnlineManager() {
  * pendente (fila de peso/meta + treino não sincronizado).
  */
 export async function runOfflineSync(userId: string, qc: QueryClient): Promise<void> {
-  await refreshRememberMeToken(true);
-  await flushOfflineQueue(userId, qc);
-  await flushPendingWorkout(qc);
+  useSyncStore.getState().setSyncing(true);
+  try {
+    await refreshRememberMeToken(true);
+    await flushOfflineQueue(userId, qc);
+    await flushPendingWorkout(qc);
+  } finally {
+    await refreshPendingCount();
+    useSyncStore.getState().setSyncing(false);
+  }
 }
 
 /**

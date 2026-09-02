@@ -1,6 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../client';
-import type { StudentSummary } from '../../types/api';
+import type { Program, StudentSummary } from '../../types/api';
+import { isNetworkError } from '../../lib/net';
+import { useAuthStore } from '../../store/auth.store';
+import {
+  queueCoachStudentGoal,
+  queueCoachStudentProgram,
+  queueCoachStudentNotes,
+  queueCoachRemoveStudent,
+} from '../../lib/offline-queue';
 
 export function useStudents() {
   return useQuery({
@@ -27,7 +35,13 @@ export function useUpdateStudentGoal() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, targetWeight, goalType }: { id: string; targetWeight: number; goalType: 'LOSE' | 'GAIN' | 'MAINTAIN' }) => {
-      await api.patch(`/students/${id}/goal`, { targetWeight, goalType });
+      try {
+        await api.patch(`/students/${id}/goal`, { targetWeight, goalType });
+      } catch (err) {
+        const userId = useAuthStore.getState().userId;
+        if (!isNetworkError(err) || !userId) throw err;
+        await queueCoachStudentGoal(qc, userId, { studentId: id, targetWeight, goalType });
+      }
     },
     onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: ['students'] });
@@ -40,7 +54,17 @@ export function useAssignStudentProgram() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, programId }: { id: string; programId: string | null }) => {
-      await api.patch(`/students/${id}/program`, { programId });
+      try {
+        await api.patch(`/students/${id}/program`, { programId });
+      } catch (err) {
+        const userId = useAuthStore.getState().userId;
+        if (!isNetworkError(err) || !userId) throw err;
+        const programName =
+          programId != null
+            ? qc.getQueryData<Program[]>(['programs'])?.find((p) => p.id === programId)?.name ?? null
+            : null;
+        await queueCoachStudentProgram(qc, userId, { studentId: id, programId, programName });
+      }
     },
     onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: ['students'] });
@@ -53,7 +77,13 @@ export function useUpdateStudentNotes() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ athleteId, notes }: { athleteId: string; notes: string }) => {
-      await api.patch(`/students/${athleteId}/notes`, { notes });
+      try {
+        await api.patch(`/students/${athleteId}/notes`, { notes });
+      } catch (err) {
+        const userId = useAuthStore.getState().userId;
+        if (!isNetworkError(err) || !userId) throw err;
+        await queueCoachStudentNotes(qc, userId, { studentId: athleteId, notes });
+      }
     },
     onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: ['students', vars.athleteId] });
@@ -65,7 +95,13 @@ export function useRemoveStudent() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      await api.delete(`/students/${id}`);
+      try {
+        await api.delete(`/students/${id}`);
+      } catch (err) {
+        const userId = useAuthStore.getState().userId;
+        if (!isNetworkError(err) || !userId) throw err;
+        await queueCoachRemoveStudent(qc, userId, id);
+      }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['students'] });

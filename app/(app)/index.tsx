@@ -24,6 +24,7 @@ import { useWorkoutTemplates, useCreateWorkoutTemplate } from '@/api/hooks/useWo
 import { useWorkouts } from '@/api/hooks/useWorkouts';
 import { useAssignedProgram } from '@/api/hooks/usePrograms';
 import { authClient } from '@/lib/auth';
+import { useOnline } from '@/lib/useOnline';
 import { resetAnalytics } from '@/lib/analytics';
 import type { Workout } from '@/types/api';
 import { Logo } from '@/components/shared/Logo';
@@ -101,6 +102,7 @@ export default function DashboardScreen() {
   const { colors, direction } = useTheme();
   const { clearSession } = useAuthStore();
   const queryClient = useQueryClient();
+  const isOnline = useOnline();
 
   useFocusEffect(
     React.useCallback(() => {
@@ -316,10 +318,19 @@ export default function DashboardScreen() {
     router.push('/(app)/workout/active' as any);
   }
 
-  if (profileLoading && recordsLoading) {
+  // Só bloqueia quando não há NADA em cache pra mostrar. Com o cache persistido,
+  // depois da primeira sync isso praticamente nunca acontece — offline sem cache
+  // mostra um aviso em vez de um spinner infinito.
+  if (!studentProfile && !(bodyRecords && bodyRecords.length)) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg, justifyContent: 'center', alignItems: 'center' }}>
-        <ActivityIndicator color={colors.accent} />
+      <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg, justifyContent: 'center', alignItems: 'center', padding: 24 }}>
+        {isOnline ? (
+          <ActivityIndicator color={colors.accent} />
+        ) : (
+          <Text style={{ fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 14, color: colors.ink3, textAlign: 'center', lineHeight: 20 }}>
+            Sem conexão e sem dados salvos ainda.{'\n'}Conecte-se uma vez para usar o app offline.
+          </Text>
+        )}
       </SafeAreaView>
     );
   }

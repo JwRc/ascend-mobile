@@ -18,7 +18,9 @@ import {
   HankenGrotesk_700Bold,
   HankenGrotesk_800ExtraBold,
 } from '@expo-google-fonts/hanken-grotesk';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
+import { queryClient } from '@/lib/query-client';
+import { persistOptions, reconcileCacheOwner } from '@/lib/query-persist';
 import { ThemeContext, buildTheme } from '@/theme';
 import { useUIStore } from '@/store/ui.store';
 import { useAuthStore, type UserRole } from '@/store/auth.store';
@@ -34,7 +36,9 @@ import {
   clearRememberMeToken,
 } from '@/lib/auth';
 import { stashOrphanedWorkout } from '@/lib/orphaned-session';
+import { getLastUser } from '@/lib/last-user';
 import { OfflineSync } from '@/components/OfflineSync';
+import { OfflineBanner } from '@/components/OfflineBanner';
 import { StripeProvider } from '@stripe/stripe-react-native';
 import { PostHogProvider } from 'posthog-react-native';
 import { posthog, identify } from '@/lib/analytics';
@@ -119,33 +123,24 @@ function BootScreen({ accent }: { accent: string }) {
   );
 }
 
-const queryClient = new QueryClient({
-  defaultOptions: {
-    // networkMode 'always': queries/mutations sempre executam (mesmo offline) e
-    // falham rápido, servindo o cache — o comportamento que o app já tinha. O
-    // onlineManager (ligado ao NetInfo em @/lib/offline-sync) continua disparando
-    // o refetch automático das queries stale quando a conexão volta.
-    queries: {
-      retry: 1,
-      staleTime: 1000 * 60 * 5,
-      networkMode: 'always',
-    },
-    mutations: {
-      networkMode: 'always',
-    },
-  },
-});
-
 export default function RootLayout() {
   const { colorScheme, direction, accent } = useUIStore();
   const systemColorScheme = useColorScheme();
   const isDark = colorScheme === 'system' ? systemColorScheme === 'dark' : colorScheme === 'dark';
   const theme = buildTheme(isDark, direction, accent);
   const { setSession, markHydrated, setSubscriptionExpired } = useAuthStore();
+  const userId = useAuthStore((s) => s.userId);
   const [sessionChecked, setSessionChecked] = React.useState(false);
+  const [cacheRestored, setCacheRestored] = React.useState(false);
   const [strengthHydrated, setStrengthHydrated] = React.useState(
     () => useStrengthStore.persist.hasHydrated(),
   );
+
+  // Ao trocar de conta no mesmo aparelho, zera o cache persistido de quem logou
+  // antes (o persist-client restaura o último cache salvo, seja de quem for).
+  React.useEffect(() => {
+    if (userId) void reconcileCacheOwner(queryClient, userId);
+  }, [userId]);
 
   React.useEffect(() => {
     if (strengthHydrated) return;
@@ -169,86 +164,92 @@ export default function RootLayout() {
   }, []);
 
   React.useEffect(() => {
-    async function restoreSession() {
-      console.log('RESTORE SESSION - início');
-      // serverResponded = true quando o servidor devolveu qualquer resposta HTTP
-      // (incluindo "sem sessão"). Só usamos offline quando não há resposta de rede.
-      let serverResponded = false;
+    let released = false;
+    const releaseBoot = () => {
+      if (released) return;
+      released = true;
+      markHydrated();
+      setSessionChecked(true);
+    };
+
+    // Consulta o servidor e concilia a sessão. Usada tanto no caminho bloqueante
+    // (sem token offline válido) quanto em background (já liberamos o boot a
+    // partir do token). Retorna true se o servidor respondeu qualquer coisa.
+    async function syncWithServer(): Promise<boolean> {
       try {
         const { data } = await getSessionWithRetry();
-        console.log('RESTORE SESSION - resposta', data);
-
-        serverResponded = true;
         if (data?.session && data?.user) {
-          console.log('RESTORE SESSION - setSession');
           const u = data.user as { id: string; email: string; name?: string | null; role?: string; tenantId?: string | null };
           const role: UserRole = u.role === 'COACH' ? 'COACH' : 'STUDENT';
           setSession(u.id, u.email, role, { name: u.name ?? null, tenantId: u.tenantId ?? null });
           identify(u.id, role.toLowerCase());
           void registerPushToken();
           void refreshRememberMeToken(true);
-          return;
+          return true;
         }
-        // Servidor respondeu mas não há sessão válida → não usar modo offline
-        console.log('RESTORE SESSION - sem sessão');
-        return;
+        // Servidor respondeu mas não há sessão → derruba a sessão offline otimista
+        await useAuthStore.getState().clearSession();
+        return true;
       } catch (err: any) {
-         console.log('RESTORE SESSION - erro', err);
         const status = err?.status ?? err?.response?.status ?? err?.statusCode;
         if (status === 402) {
-          
           setSubscriptionExpired(true);
           router.replace('/(billing)');
-          return;
+          return true;
         }
-        // status presente = servidor respondeu com erro HTTP → não usar offline
-        if (status) serverResponded = true;
-        // sem status = erro de rede → servidor inacessível → tenta offline abaixo
-      }
-
-      // Só chega aqui quando o servidor estava inacessível (sem internet)
-      if (serverResponded) return;
-
-      try {
-        const token = await getRememberMeToken();
-        if (token) {
-          const claims = parseRememberMeJwt(token);
-          if (claims && isRememberMeValid(claims)) {
-            const role: UserRole = claims.role === 'COACH' ? 'COACH' : 'STUDENT';
-            setSession(claims.userId, claims.email, role, {
-              tenantId: claims.tenantId ?? null,
-              plan: claims.plan,
-              offlineGraceUntil: claims.offlineGraceUntil,
-              isOfflineSession: true,
-            });
-            identify(claims.userId, role.toLowerCase());
-            void registerPushToken();
-            return;
-          }
-          if (claims) {
-            // Janela offline (7 dias) vencida — expira a sessão localmente. Preserva
-            // um treino ainda não sincronizado sob o userId pra ressincronizar no
-            // próximo login e limpa os tokens pra não retentar no próximo boot.
-            // Fire-and-forget: nunca deve segurar a conclusão do boot.
-            void (async () => {
-              try {
-                await stashOrphanedWorkout(claims.userId);
-              } finally {
-                await clearToken().catch(() => {});
-                await clearRememberMeToken().catch(() => {});
-              }
-            })();
-          }
-        }
-      } catch {
-        // JWT corrompido ou expirado
+        return !!status; // status presente = servidor respondeu com erro HTTP
       }
     }
 
-    restoreSession().finally(() => {
-      markHydrated();
-      setSessionChecked(true);
-    });
+    async function restoreSession() {
+      // 1) Sessão offline a partir do JWT remember-me (rápido, sem rede). Se
+      // válida (regra de grace intocada em isRememberMeValid), libera o boot
+      // IMEDIATAMENTE e concilia com o servidor em background.
+      let hydratedFromToken = false;
+      try {
+        const token = await getRememberMeToken();
+        const claims = token ? parseRememberMeJwt(token) : null;
+        if (claims && isRememberMeValid(claims)) {
+          const role: UserRole = claims.role === 'COACH' ? 'COACH' : 'STUDENT';
+          const last = await getLastUser();
+          setSession(claims.userId, claims.email, role, {
+            name: last?.userId === claims.userId ? last.name : null,
+            tenantId: claims.tenantId ?? null,
+            plan: claims.plan,
+            offlineGraceUntil: claims.offlineGraceUntil,
+            isOfflineSession: true,
+          });
+          identify(claims.userId, role.toLowerCase());
+          void registerPushToken();
+          hydratedFromToken = true;
+          releaseBoot();
+          // background: promove/corrige a sessão (name real, role, tenantId),
+          // trata 402 e "sem sessão". Não bloqueia o boot.
+          void syncWithServer();
+        } else if (claims) {
+          // Janela offline (7 dias) vencida — expira localmente. Preserva um
+          // treino não sincronizado sob o userId e limpa os tokens.
+          void (async () => {
+            try {
+              await stashOrphanedWorkout(claims.userId);
+            } finally {
+              await clearToken().catch(() => {});
+              await clearRememberMeToken().catch(() => {});
+            }
+          })();
+        }
+      } catch {
+        // JWT corrompido — segue pro caminho bloqueante
+      }
+
+      if (hydratedFromToken) return;
+
+      // 2) Sem token offline utilizável — caminho bloqueante: só libera o boot
+      // depois da resposta do servidor (ou do timeout de rede).
+      await syncWithServer();
+    }
+
+    restoreSession().finally(releaseBoot);
   }, []);
 
   // Esconde o splash nativo no primeiro render — o BootScreen cobre tudo com o mesmo fundo
@@ -256,29 +257,51 @@ export default function RootLayout() {
     SplashScreen.hideAsync();
   }, []);
 
-  if (!fontsReady || !sessionChecked || !strengthHydrated) return <BootScreen accent={accent} />;
+  // Rede de segurança: se a restauração do cache travar (persister com problema),
+  // não deixa o BootScreen preso pra sempre — segue sem cache persistido.
+  React.useEffect(() => {
+    const t = setTimeout(() => setCacheRestored(true), 4000);
+    return () => clearTimeout(t);
+  }, []);
+
+  // O PersistQueryClientProvider precisa estar MONTADO pra restaurar o cache do
+  // disco — por isso o BootScreen renderiza dentro dele, não antes. `ready` só
+  // libera quando sessão, fontes, strength store e cache do React Query estão
+  // prontos.
+  const ready = fontsReady && sessionChecked && strengthHydrated && cacheRestored;
 
   return (
     <PostHogProvider client={posthog ?? undefined}>
       <StripeProvider publishableKey={process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? ''}>
         <SafeAreaProvider>
-          <QueryClientProvider client={queryClient}>
+          <PersistQueryClientProvider
+            client={queryClient}
+            persistOptions={persistOptions}
+            onSuccess={() => setCacheRestored(true)}
+          >
             <ThemeContext.Provider value={theme}>
               <StatusBar style={isDark ? 'light' : 'dark'} />
-              <Stack screenOptions={{ headerShown: false }}>
-                <Stack.Screen name="index" />
-                <Stack.Screen name="invite" />
-                <Stack.Screen name="(auth)" />
-                <Stack.Screen name="(onboarding)" />
-                <Stack.Screen name="(signup)" />
-                <Stack.Screen name="(app)" />
-                <Stack.Screen name="(coach)" />
-                <Stack.Screen name="(billing)" />
-              </Stack>
-              <GlobalPrCelebration />
-              <OfflineSync />
+              {ready ? (
+                <>
+                  <Stack screenOptions={{ headerShown: false }}>
+                    <Stack.Screen name="index" />
+                    <Stack.Screen name="invite" />
+                    <Stack.Screen name="(auth)" />
+                    <Stack.Screen name="(onboarding)" />
+                    <Stack.Screen name="(signup)" />
+                    <Stack.Screen name="(app)" />
+                    <Stack.Screen name="(coach)" />
+                    <Stack.Screen name="(billing)" />
+                  </Stack>
+                  <GlobalPrCelebration />
+                  <OfflineSync />
+                  <OfflineBanner />
+                </>
+              ) : (
+                <BootScreen accent={accent} />
+              )}
             </ThemeContext.Provider>
-          </QueryClientProvider>
+          </PersistQueryClientProvider>
         </SafeAreaProvider>
       </StripeProvider>
     </PostHogProvider>

@@ -4,6 +4,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { useTheme } from '@/theme';
 import { useSupportTickets, type SupportTicket } from '@/api/hooks/useSupportTickets';
+import { useOnline } from '@/lib/useOnline';
+import { OnlineOnlyNotice } from '@/components/shared/OnlineOnlyNotice';
 import { TicketStatusPill } from './TicketStatusPill';
 import { NewTicketModal } from './NewTicketModal';
 
@@ -16,8 +18,18 @@ type Props = { basePath: string };
 
 export function SupportTicketsScreen({ basePath }: Props) {
   const { colors, direction } = useTheme();
+  const online = useOnline();
   const { data: tickets, isFetching, refetch } = useSupportTickets();
   const [showNew, setShowNew] = React.useState(false);
+
+  if (!online && !tickets) {
+    return (
+      <OnlineOnlyNotice
+        title="Suporte precisa de conexão"
+        message="A abertura e o acompanhamento de tickets dependem de internet. Tente novamente quando estiver online."
+      />
+    );
+  }
 
   function openTicket(id: string) {
     router.push({ pathname: `${basePath}/[ticketId]` as any, params: { ticketId: id } });
