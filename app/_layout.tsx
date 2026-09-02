@@ -228,11 +228,17 @@ export default function RootLayout() {
           if (claims) {
             // Janela offline (7 dias) vencida — expira a sessão localmente. Preserva
             // um treino ainda não sincronizado sob o userId pra ressincronizar no
-            // próximo login, e limpa os tokens pra não retentar no próximo boot.
-            await stashOrphanedWorkout(claims.userId);
+            // próximo login e limpa os tokens pra não retentar no próximo boot.
+            // Fire-and-forget: nunca deve segurar a conclusão do boot.
+            void (async () => {
+              try {
+                await stashOrphanedWorkout(claims.userId);
+              } finally {
+                await clearToken().catch(() => {});
+                await clearRememberMeToken().catch(() => {});
+              }
+            })();
           }
-          await clearToken();
-          await clearRememberMeToken();
         }
       } catch {
         // JWT corrompido ou expirado

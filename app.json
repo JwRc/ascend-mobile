@@ -46,7 +46,8 @@
           "enableGooglePay": false
         }
       ],
-      "expo-sharing"
+      "expo-sharing",
+      "./plugins/withUserLeaveHintFix"
     ],
     "experiments": {
       "typedRoutes": true
