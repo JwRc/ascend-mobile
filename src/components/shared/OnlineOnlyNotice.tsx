@@ -5,8 +5,8 @@ import { router } from 'expo-router';
 import { useTheme } from '@/theme';
 
 /**
- * Placeholder pra seções que dependem de serviços externos (Suporte / Request
- * Tracker, Billing / Stripe) e não têm como funcionar offline.
+ * Placeholder pra seções que dependem de serviços externos (Suporte /
+ * Libredesk, Billing / Stripe) e não têm como funcionar offline.
  */
 export function OnlineOnlyNotice({ title, message }: { title: string; message: string }) {
   const { colors } = useTheme();

@@ -52,7 +52,12 @@ function routeForNotification(data: Record<string, any> | undefined, role: 'STUD
   const isCoach = role === 'COACH';
   const ticketId = data?.ticketId;
   if (ticketId) {
-    router.push((isCoach ? `/(coach)/support/${ticketId}` : `/(app)/support/${ticketId}`) as any);
+    const encodedTicketId = encodeURIComponent(ticketId as string);
+    router.push(
+      (isCoach
+        ? `/(coach)/support/${encodedTicketId}`
+        : `/(app)/support/${encodedTicketId}`) as any,
+    );
     return;
   }
   router.push((isCoach ? '/(coach)' : '/(app)/notifications') as any);

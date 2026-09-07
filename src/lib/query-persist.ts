@@ -20,7 +20,7 @@ export const CACHE_SCHEMA_VERSION = 1;
 const CACHE_KEY = 'ascentio-rq-cache';
 const CACHE_OWNER_KEY = 'ascentio-rq-cache-owner';
 
-// Query keys que NÃO vão pro disco: billing (Stripe) e support (Request Tracker)
+// Query keys que NÃO vão pro disco: billing (Stripe) e support (Libredesk)
 // são serviços externos, online-only — cachear dado stale deles só confunde.
 const NON_PERSISTED_ROOTS = new Set(['billing', 'support']);
 
