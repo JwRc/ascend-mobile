@@ -14,6 +14,7 @@ import { FlagBadge } from './FlagBadge';
 import { StatusPill } from './StatusPill';
 import type { CoachAthlete } from '@/store/coach.store';
 import { STALE_DAYS } from '@/store/coach.store';
+import { round1, kgToUnit } from '@/lib/utils';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -130,11 +131,11 @@ function RosterRow({ a, onPress }: { a: CoachAthlete; onPress: () => void }) {
         ) : (
           <>
             <Text style={{ fontFamily: 'Archivo_800ExtraBold', fontSize: 15, color: colors.ink }}>
-              {a.trend}
+              {round1(kgToUnit(a.trend, u))}
               <Text style={{ fontSize: 11, fontFamily: 'HankenGrotesk_700Bold', color: colors.ink3 }}>{u}</Text>
             </Text>
             <Text style={{ fontFamily: 'HankenGrotesk_700Bold', fontSize: 12, color: deltaColor }}>
-              {arrow} {Math.abs(a.weekDelta)}
+              {arrow} {round1(Math.abs(kgToUnit(a.weekDelta, u)))}
             </Text>
           </>
         )}

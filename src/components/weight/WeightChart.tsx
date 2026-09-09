@@ -3,18 +3,18 @@ import { View, Text, useWindowDimensions } from 'react-native';
 import Svg, { Line, Circle, Polyline, Text as SvgText } from 'react-native-svg';
 import { useTheme } from '@/theme';
 import { WeightEntry } from '@/types/api';
-import { movingAverage, round1, fmtDateShort } from '@/lib/utils';
+import { movingAverage, round1, fmtDateShort, kgToUnit } from '@/lib/utils';
 
 type Props = {
   entries: WeightEntry[];
   unit: 'kg' | 'lb';
 };
 
-export function WeightChart({ entries, unit }: Props) {
+export function WeightChart({ entries: entriesKg, unit }: Props) {
   const { colors } = useTheme();
   const { width } = useWindowDimensions();
 
-  if (entries.length < 2) {
+  if (entriesKg.length < 2) {
     return (
       <View style={{ paddingVertical: 60, alignItems: 'center' }}>
         <Text style={{ fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 14, color: colors.ink3 }}>
@@ -23,6 +23,12 @@ export function WeightChart({ entries, unit }: Props) {
       </View>
     );
   }
+
+  // O backend guarda peso em kg; o gráfico mostra tudo na unidade escolhida pelo usuário.
+  const entries = React.useMemo(
+    () => entriesKg.map((e) => ({ ...e, weight: kgToUnit(e.weight, unit) })),
+    [entriesKg, unit]
+  );
 
   const ma = movingAverage(entries, 7);
   const allWeights = [...entries.map((e) => e.weight), ...ma.map((e) => e.weight)];
@@ -80,7 +86,7 @@ export function WeightChart({ entries, unit }: Props) {
                 fill={colors.ink3}
                 fontFamily="HankenGrotesk_600SemiBold"
               >
-                {w}
+                {`${w}${unit}`}
               </SvgText>
             </React.Fragment>
           );

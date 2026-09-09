@@ -7,7 +7,7 @@ import { Field } from '@/components/shared/Field';
 import { StyledInput } from '@/components/shared/Field';
 import { useTheme } from '@/theme';
 import { WeightEntry } from '@/types/api';
-import { todayISO, round1 } from '@/lib/utils';
+import { todayISO, round1, kgToUnit, unitToKg } from '@/lib/utils';
 
 type Props = {
   visible: boolean;
@@ -21,14 +21,16 @@ type Props = {
 export function LogModal({ visible, unit, lastWeight, entries, onSave, onClose }: Props) {
   const { colors } = useTheme();
   const [date, setDate] = React.useState(todayISO());
-  const [weight, setWeight] = React.useState(lastWeight ?? (unit === 'kg' ? 75 : 165));
+  const [weight, setWeight] = React.useState(
+    lastWeight != null ? round1(kgToUnit(lastWeight, unit)) : unit === 'kg' ? 75 : 165
+  );
   const minW = unit === 'kg' ? 30 : 66;
   const maxW = unit === 'kg' ? 250 : 550;
 
   const existing = entries.find((e) => e.date === date);
 
   React.useEffect(() => {
-    if (existing) setWeight(existing.weight);
+    if (existing) setWeight(round1(kgToUnit(existing.weight, unit)));
   }, [date]);
 
   return (
@@ -40,7 +42,9 @@ export function LogModal({ visible, unit, lastWeight, entries, onSave, onClose }
         <Btn
           kind="primary"
           full
-          onPress={() => onSave(date, round1(Math.min(maxW, Math.max(minW, weight))))}
+          onPress={() =>
+            onSave(date, round1(unitToKg(Math.min(maxW, Math.max(minW, weight)), unit)))
+          }
         >
           {existing ? 'Atualizar registro' : 'Salvar registro'}
         </Btn>

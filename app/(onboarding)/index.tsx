@@ -12,7 +12,7 @@ import { useTheme } from '@/theme';
 import { Btn } from '@/components/shared/Btn';
 import { SegmentedControl } from '@/components/shared/SegmentedControl';
 import { StyledInput } from '@/components/shared/Field';
-import { round1, convert } from '@/lib/utils';
+import { round1, convert, unitToKg } from '@/lib/utils';
 import { useUpdateStudentProfile } from '@/api/hooks/useStudentProfile';
 import { useSetGoal } from '@/api/hooks/useGoals';
 import { OnboardingHeader, StepEyebrow, StepQuestion } from '@/components/onboarding/OnboardingChrome';
@@ -84,7 +84,9 @@ export default function OnboardingScreen() {
       reminders: d.reminders,
     });
     const goalType = d.goalType === 'lose' ? 'LOSE' : d.goalType === 'strength' ? 'GAIN' : 'MAINTAIN';
-    await setGoal.mutateAsync({ targetWeight: round1(Math.min(range.max, Math.max(range.min, d.goal))), goalType });
+    // d.goal está na unidade escolhida pelo usuário — backend guarda a meta sempre em kg.
+    const goalInUnit = round1(Math.min(range.max, Math.max(range.min, d.goal)));
+    await setGoal.mutateAsync({ targetWeight: round1(unitToKg(goalInUnit, u)), goalType });
     router.replace('/(app)');
   }
 

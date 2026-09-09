@@ -11,7 +11,11 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.anonymous.ascentiomobile",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSCameraUsageDescription": "O Ascentio usa a câmera para escanear dados do cartão ao adicionar uma forma de pagamento.",
+        "NSMicrophoneUsageDescription": "O Ascentio pode usar o microfone durante o fluxo de pagamento e verificação.",
+        "NSPhotoLibraryUsageDescription": "O Ascentio acessa suas fotos para anexar comprovantes e documentos quando necessário.",
+        "NSPhotoLibraryAddUsageDescription": "O Ascentio salva imagens na sua galeria, como o card de comemoração de PR."
       }
     },
     "android": {
@@ -47,6 +51,8 @@
         }
       ],
       "expo-sharing",
+      "expo-apple-authentication",
+      "expo-notifications",
       "./plugins/withUserLeaveHintFix"
     ],
     "experiments": {

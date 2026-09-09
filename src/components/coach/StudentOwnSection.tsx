@@ -17,7 +17,7 @@ import { useWorkoutTemplates, useCreateWorkoutTemplate } from '@/api/hooks/useWo
 import { useWorkouts } from '@/api/hooks/useWorkouts';
 import { useStrengthStore } from '@/store/strength.store';
 import {
-  round1, movingAverage, weighInStreak, last7Days, convert, fmtDateLong, todayISO,
+  round1, movingAverage, weighInStreak, last7Days, kgToUnit, unitToKg, fmtDateLong, todayISO,
 } from '@/lib/utils';
 import { STALE_DAYS } from '@/store/coach.store';
 import type { Workout } from '@/types/api';
@@ -127,10 +127,9 @@ export function StudentOwnSection({ units, athlete, programs, onAssignProgram, o
   const pct = Math.max(0, Math.min(100, Math.round((done / span) * 100)));
   const toGo = round1(Math.abs(latestMA - goal));
 
-  // bmi
+  // bmi — latestMA já está em kg (como o backend retorna); IMC não depende da unidade de exibição.
   const hM = (profile?.heightCm ?? 0) / 100;
-  const kg = convert(latestMA, u, 'kg');
-  const bmi = hM > 0 ? round1(kg / (hM * hM)) : 0;
+  const bmi = hM > 0 ? round1(latestMA / (hM * hM)) : 0;
 
   // strength data
   const sessions: Session[] = React.useMemo(() => workoutsRaw.map(workoutToSession), [workoutsRaw]);
@@ -250,14 +249,14 @@ export function StudentOwnSection({ units, athlete, programs, onAssignProgram, o
 
             <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 8, marginTop: 6, marginBottom: 4 }}>
               <Text style={{ fontFamily: 'Archivo_900Black', fontSize: 72, lineHeight: 66, letterSpacing: -1, color: colors.ink }}>
-                {ma.length ? round1(latestMA) : '—'}
+                {ma.length ? round1(kgToUnit(latestMA, u)) : '—'}
               </Text>
               <Text style={{ fontFamily: 'Archivo_800ExtraBold', fontSize: 22, color: colors.ink3 }}>{u}</Text>
             </View>
 
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
               <Text style={{ fontSize: 14, color: trendColor }}>{weekDelta < 0 ? '▾' : weekDelta > 0 ? '▴' : '—'}</Text>
-              <Text style={{ fontFamily: 'HankenGrotesk_700Bold', fontSize: 15, color: trendColor }}>{Math.abs(weekDelta)}{u}</Text>
+              <Text style={{ fontFamily: 'HankenGrotesk_700Bold', fontSize: 15, color: trendColor }}>{round1(Math.abs(kgToUnit(weekDelta, u)))}{u}</Text>
               <Text style={{ fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 15, color: colors.ink3 }}>esta semana</Text>
             </View>
 
@@ -268,7 +267,7 @@ export function StudentOwnSection({ units, athlete, programs, onAssignProgram, o
                   Último registro
                 </Text>
                 <Text style={{ fontFamily: 'Archivo_800ExtraBold', fontSize: 24, letterSpacing: -0.5, color: colors.ink }}>
-                  {latest ? round1(latest.weight) : '—'}
+                  {latest ? round1(kgToUnit(latest.weight, u)) : '—'}
                   <Text style={{ fontSize: 13, color: colors.ink3, fontFamily: 'HankenGrotesk_700Bold' }}>{' '}{u}</Text>
                 </Text>
               </View>
@@ -346,7 +345,7 @@ export function StudentOwnSection({ units, athlete, programs, onAssignProgram, o
             {recent.map((e, i) => {
               const idxInSorted = entries.findIndex((x) => x.date === e.date);
               const prev = idxInSorted > 0 ? entries[idxInSorted - 1].weight : null;
-              const delta = prev != null ? round1(e.weight - prev) : null;
+              const delta = prev != null ? round1(kgToUnit(e.weight - prev, u)) : null;
               const dc = delta == null ? colors.ink3 : delta < 0 ? semanticColors.success : delta > 0 ? semanticColors.warning : colors.ink3;
               return (
                 <View
@@ -364,7 +363,7 @@ export function StudentOwnSection({ units, athlete, programs, onAssignProgram, o
                     {fmtDateLong(e.date)}
                   </Text>
                   <Text style={{ fontFamily: 'Archivo_800ExtraBold', fontSize: 20, letterSpacing: -0.3, color: colors.ink }}>
-                    {round1(e.weight)}
+                    {round1(kgToUnit(e.weight, u))}
                     <Text style={{ fontSize: 12, fontFamily: 'HankenGrotesk_700Bold', color: colors.ink3 }}>{u}</Text>
                   </Text>
                   <Text style={{ fontFamily: 'HankenGrotesk_700Bold', fontSize: 13.5, minWidth: 52, textAlign: 'right', color: dc }}>
@@ -393,7 +392,7 @@ export function StudentOwnSection({ units, athlete, programs, onAssignProgram, o
             <Card>
               <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between' }}>
                 <Text style={{ fontFamily: 'HankenGrotesk_700Bold', fontSize: 13, letterSpacing: 0.8, textTransform: 'uppercase', color: colors.ink2 }}>
-                  Meta · {round1(goal)}{u}
+                  Meta · {round1(kgToUnit(goal, u))}{u}
                 </Text>
                 <Text style={{ fontFamily: 'Archivo_900Black', fontSize: 30, letterSpacing: -1, color: colors.ink }}>{pct}%</Text>
               </View>
@@ -402,7 +401,7 @@ export function StudentOwnSection({ units, athlete, programs, onAssignProgram, o
               </View>
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
                 <Text style={{ fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 13.5, color: colors.ink3 }}>
-                  {toGo <= 0.05 ? 'Meta atingida — ótimo trabalho.' : `${toGo}${u} para a meta · ${losing ? 'em queda' : 'subindo'}`}
+                  {toGo <= 0.05 ? 'Meta atingida — ótimo trabalho.' : `${round1(kgToUnit(toGo, u))}${u} para a meta · ${losing ? 'em queda' : 'subindo'}`}
                 </Text>
                 <Text style={{ fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 13, color: colors.ink3 }}>
                   {goalSetBy === 'COACH' ? 'Definido pelo coach' : 'Definido por você'}
@@ -453,10 +452,10 @@ export function StudentOwnSection({ units, athlete, programs, onAssignProgram, o
         <>
           {/* stat strip */}
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-            <StatChip label={`Peso (${u})`} value={athlete.trend} />
+            <StatChip label={`Peso (${u})`} value={round1(kgToUnit(athlete.trend, u))} />
             <StatChip
               label="Δ semana"
-              value={`${metricsArrow} ${Math.abs(athlete.weekDelta)}`}
+              value={`${metricsArrow} ${round1(Math.abs(kgToUnit(athlete.weekDelta, u)))}`}
               warn={athlete.goalDir !== 'maintain' && !lostGood}
             />
             <StatChip label="Meta %" value={athlete.goalPct} unit="%" />
@@ -530,12 +529,12 @@ export function StudentOwnSection({ units, athlete, programs, onAssignProgram, o
               </Text>
             </View>
             <Stepper
-              value={athlete.goal ?? athlete.trend ?? 70}
+              value={round1(kgToUnit(athlete.goal ?? athlete.trend ?? 70, u))}
               step={0.5}
               unit={u}
               min={30}
               max={250}
-              onChange={(v) => onUpdateGoal(athlete.id, v)}
+              onChange={(v) => onUpdateGoal(athlete.id, round1(unitToKg(v, u)))}
             />
           </View>
 

@@ -113,6 +113,7 @@ export function ActiveSession({ active, sessions, unit, onUpdateActive, onFinish
     setAddingEx(false);
   }
 
+  // Retorna sempre em kg (mesma unidade do WorkSet armazenado) — AddSetForm converte para exibição.
   function getDefaults(name: string) {
     const hist = sessionsWithExercise(sessions, name);
     if (hist.length) {
@@ -123,7 +124,7 @@ export function ActiveSession({ active, sessions, unit, onUpdateActive, onFinish
         return { weight: last.weight, reps: last.reps };
       }
     }
-    return { weight: unit === 'kg' ? 20 : 45, reps: 8 };
+    return { weight: 20, reps: 8 };
   }
 
   return (

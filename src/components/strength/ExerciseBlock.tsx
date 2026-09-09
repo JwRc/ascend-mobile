@@ -4,7 +4,7 @@ import { useTheme } from '@/theme';
 import { Card } from '@/components/shared/Card';
 import { AddSetForm } from './AddSetForm';
 import { WorkSet, SetType, type BestSet } from '@/store/strength.store';
-import { round1, epley1RM, classifySets } from '@/lib/utils';
+import { round1, epley1RM, classifySets, kgToUnit } from '@/lib/utils';
 
 const SET_TYPE_LABEL: Record<string, string> = {
   warmup: 'AQ',
@@ -59,7 +59,7 @@ export function ExerciseBlock({ name, sets, unit, defaultWeight, defaultReps, cu
           </Text>
           {currentPR && (
             <Text style={{ fontFamily: 'HankenGrotesk_700Bold', fontSize: 12, color: colors.ink3 }}>
-              PR: {round1(currentPR.weight)}{unit} × {currentPR.reps}
+              PR: {round1(kgToUnit(currentPR.weight, unit))}{unit} × {currentPR.reps}
             </Text>
           )}
         </View>
@@ -99,7 +99,7 @@ export function ExerciseBlock({ name, sets, unit, defaultWeight, defaultReps, cu
           {sets.map((s, i) => {
             const typeKey = s.type || inferredTypes[i] || 'warmup';
             const typeStyle = SET_TYPE_COLORS[typeKey] || SET_TYPE_COLORS.warmup;
-            const estimated = round1(epley1RM(s.weight, s.reps));
+            const estimated = round1(kgToUnit(epley1RM(s.weight, s.reps), unit));
 
             return (
               <View
@@ -145,7 +145,7 @@ export function ExerciseBlock({ name, sets, unit, defaultWeight, defaultReps, cu
                   </Text>
                 </View>
                 <Text style={{ flex: 1, fontFamily: 'HankenGrotesk_700Bold', fontSize: 15, color: colors.ink }}>
-                  {s.weight}
+                  {round1(kgToUnit(s.weight, unit))}
                   <Text style={{ fontSize: 11, color: colors.ink3 }}>{unit}</Text>
                   {' × '}
                   {s.reps}

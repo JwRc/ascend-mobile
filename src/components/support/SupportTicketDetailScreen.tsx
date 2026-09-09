@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, TextInput, TouchableOpacity, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { useTheme } from '@/theme';
 import { useSupportTicket, useReplyToTicket, useCloseTicket } from '@/api/hooks/useSupportTickets';
@@ -18,6 +18,7 @@ type Props = { ticketId: string };
 
 export function SupportTicketDetailScreen({ ticketId }: Props) {
   const { colors, direction } = useTheme();
+  const insets = useSafeAreaInsets();
   const online = useOnline();
   const { data: ticket, isError, isLoading } = useSupportTicket(ticketId);
   const replyToTicket = useReplyToTicket(ticketId);
@@ -62,8 +63,12 @@ export function SupportTicketDetailScreen({ ticketId }: Props) {
   const closed = isTicketClosed(ticket.status);
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }}>
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top', 'left', 'right']}>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={0}
+      >
         {/* top bar */}
         <View
           style={{
@@ -99,8 +104,16 @@ export function SupportTicketDetailScreen({ ticketId }: Props) {
 
         <ScrollView
           ref={scrollRef}
+          style={{ flex: 1 }}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="interactive"
           onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })}
-          contentContainerStyle={{ paddingHorizontal: 20, paddingVertical: 14, gap: 10 }}
+          contentContainerStyle={{
+            paddingHorizontal: 20,
+            paddingTop: 14,
+            paddingBottom: closed ? insets.bottom + 14 : 14,
+            gap: 10,
+          }}
         >
           {ticket.messages.map((m, i) => (
             <View
@@ -140,88 +153,90 @@ export function SupportTicketDetailScreen({ ticketId }: Props) {
         </ScrollView>
 
         {!closed && (
-          <View
-            style={{
-              flexDirection: 'row',
-              alignItems: 'flex-end',
-              gap: 10,
-              paddingHorizontal: 20,
-              paddingVertical: 12,
-              borderTopWidth: 1.5,
-              borderTopColor: colors.line,
-            }}
-          >
-            <TextInput
-              value={message}
-              onChangeText={setMessage}
-              placeholder="Escreva uma mensagem…"
-              placeholderTextColor={colors.ink3}
-              multiline
+          <View style={{ paddingBottom: Math.max(insets.bottom, 10), backgroundColor: colors.bg }}>
+            {/* barra de digitação — fica sempre acima do teclado e da safe area */}
+            <View
               style={{
-                flex: 1,
-                maxHeight: 100,
-                fontFamily: 'HankenGrotesk_500Medium',
-                fontSize: 14.5,
-                color: colors.ink,
-                backgroundColor: colors.surface2,
-                borderWidth: 1.5,
-                borderColor: colors.line,
-                borderRadius: direction === 'A' ? 4 : 18,
-                paddingHorizontal: 14,
-                paddingVertical: 10,
-              }}
-            />
-            <TouchableOpacity
-              onPress={handleSend}
-              disabled={replyToTicket.isPending || !message.trim()}
-              style={{
-                width: 42,
-                height: 42,
-                borderRadius: 21,
-                alignItems: 'center',
-                justifyContent: 'center',
-                backgroundColor: message.trim() ? colors.accent : colors.line,
+                flexDirection: 'row',
+                alignItems: 'flex-end',
+                gap: 10,
+                paddingHorizontal: 20,
+                paddingTop: 12,
+                paddingBottom: 10,
+                borderTopWidth: 1.5,
+                borderTopColor: colors.line,
               }}
             >
-              <SendIcon size={18} color="#fff" />
-            </TouchableOpacity>
-          </View>
-        )}
+              <TextInput
+                value={message}
+                onChangeText={setMessage}
+                placeholder="Escreva uma mensagem…"
+                placeholderTextColor={colors.ink3}
+                multiline
+                style={{
+                  flex: 1,
+                  maxHeight: 100,
+                  fontFamily: 'HankenGrotesk_500Medium',
+                  fontSize: 14.5,
+                  color: colors.ink,
+                  backgroundColor: colors.surface2,
+                  borderWidth: 1.5,
+                  borderColor: colors.line,
+                  borderRadius: direction === 'A' ? 4 : 18,
+                  paddingHorizontal: 14,
+                  paddingVertical: 10,
+                }}
+              />
+              <TouchableOpacity
+                onPress={handleSend}
+                disabled={replyToTicket.isPending || !message.trim()}
+                style={{
+                  width: 42,
+                  height: 42,
+                  borderRadius: 21,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: message.trim() ? colors.accent : colors.line,
+                }}
+              >
+                <SendIcon size={18} color="#fff" />
+              </TouchableOpacity>
+            </View>
 
-        {!closed && (
-          <View style={{ flexDirection: 'row', gap: 10, paddingHorizontal: 20, paddingBottom: 16 }}>
-            <TouchableOpacity
-              onPress={() => closeTicket.mutate(false)}
-              disabled={closeTicket.isPending}
-              style={{
-                flex: 1,
-                paddingVertical: 12,
-                borderRadius: direction === 'A' ? 4 : 10,
-                borderWidth: 1.5,
-                borderColor: colors.line,
-                alignItems: 'center',
-              }}
-            >
-              <Text style={{ fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 13, color: colors.ink2 }}>
-                Marcar como não solucionado
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={() => closeTicket.mutate(true)}
-              disabled={closeTicket.isPending}
-              style={{
-                flex: 1,
-                paddingVertical: 12,
-                borderRadius: direction === 'A' ? 4 : 10,
-                borderWidth: 1.5,
-                borderColor: colors.line,
-                alignItems: 'center',
-              }}
-            >
-              <Text style={{ fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 13, color: colors.ink2 }}>
-                Marcar como solucionado
-              </Text>
-            </TouchableOpacity>
+            <View style={{ flexDirection: 'row', gap: 10, paddingHorizontal: 20, paddingTop: 8 }}>
+              <TouchableOpacity
+                onPress={() => closeTicket.mutate(false)}
+                disabled={closeTicket.isPending}
+                style={{
+                  flex: 1,
+                  paddingVertical: 12,
+                  borderRadius: direction === 'A' ? 4 : 10,
+                  borderWidth: 1.5,
+                  borderColor: colors.line,
+                  alignItems: 'center',
+                }}
+              >
+                <Text style={{ fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 13, color: colors.ink2 }}>
+                  Marcar como não solucionado
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => closeTicket.mutate(true)}
+                disabled={closeTicket.isPending}
+                style={{
+                  flex: 1,
+                  paddingVertical: 12,
+                  borderRadius: direction === 'A' ? 4 : 10,
+                  borderWidth: 1.5,
+                  borderColor: colors.line,
+                  alignItems: 'center',
+                }}
+              >
+                <Text style={{ fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 13, color: colors.ink2 }}>
+                  Marcar como solucionado
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
         )}
       </KeyboardAvoidingView>

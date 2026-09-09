@@ -80,6 +80,8 @@ export default function AthleteDetailScreen() {
   }
 
   function handleUpdateGoal(athleteId: string, goal: number) {
+    // `goal` já chega em kg — a conversão de/para a unidade de exibição acontece
+    // nos componentes que possuem o Stepper (AthleteDetail/StudentOwnSection).
     updateStudentGoal.mutate({
       id: athleteId,
       targetWeight: goal,

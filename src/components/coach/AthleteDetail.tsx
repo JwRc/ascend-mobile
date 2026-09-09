@@ -16,6 +16,7 @@ import { CoachLogWorkoutSection } from './CoachLogWorkoutSection';
 import { StatChip, SectionLabel, ProgramPicker } from './AthleteDetailBits';
 import type { CoachAthlete, CoachProgram } from '@/store/coach.store';
 import { STALE_DAYS } from '@/store/coach.store';
+import { round1, kgToUnit, unitToKg } from '@/lib/utils';
 
 // ─── Invited detail ───────────────────────────────────────────────────────────
 
@@ -227,10 +228,10 @@ export function AthleteDetail({
             >
               <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                 <View style={{ flexDirection: 'row', gap: 8 }}>
-                  <StatChip label={`Peso (${u})`} value={athlete.trend} />
+                  <StatChip label={`Peso (${u})`} value={round1(kgToUnit(athlete.trend, u))} />
                   <StatChip
                     label="Δ semana"
-                    value={`${arrow} ${Math.abs(athlete.weekDelta)}`}
+                    value={`${arrow} ${round1(Math.abs(kgToUnit(athlete.weekDelta, u)))}`}
                     warn={athlete.goalDir !== 'maintain' && !lostGood}
                   />
                   <StatChip label="Meta %" value={athlete.goalPct} unit="%" />
@@ -325,12 +326,12 @@ export function AthleteDetail({
                     </Text>
                   </View>
                   <Stepper
-                    value={athlete.goal ?? athlete.trend ?? 70}
+                    value={round1(kgToUnit(athlete.goal ?? athlete.trend ?? 70, u))}
                     step={0.5}
                     unit={u}
                     min={30}
                     max={250}
-                    onChange={(v) => onUpdateGoal(athlete.id, v)}
+                    onChange={(v) => onUpdateGoal(athlete.id, round1(unitToKg(v, u)))}
                   />
                 </View>
 

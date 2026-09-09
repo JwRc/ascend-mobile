@@ -21,6 +21,16 @@ export function convert(val: number, from: 'kg' | 'lb', to: 'kg' | 'lb'): number
   return from === 'kg' ? val * 2.20462 : val / 2.20462;
 }
 
+/** Backend always stores/returns weight in kg. Use this to convert to the user's display unit. */
+export function kgToUnit(kg: number, unit: 'kg' | 'lb'): number {
+  return convert(kg, 'kg', unit);
+}
+
+/** Convert a value the user typed/sees in their display unit back to kg before sending to the API. */
+export function unitToKg(val: number, unit: 'kg' | 'lb'): number {
+  return convert(val, unit, 'kg');
+}
+
 export function movingAverage(
   entries: { date: string; weight: number }[],
   window: number

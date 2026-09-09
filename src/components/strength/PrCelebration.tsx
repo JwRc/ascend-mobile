@@ -15,6 +15,7 @@ import { useTheme } from '@/theme';
 import { Btn } from '@/components/shared/Btn';
 import { capture } from '@/lib/analytics';
 import { PrShareCard } from './PrShareCard';
+import { round1, kgToUnit } from '@/lib/utils';
 
 type PR = {
   exercise: string;
@@ -42,9 +43,13 @@ export function PrCelebration({ visible, prs, unit, onClose }: Props) {
   const maxCardHeight = Math.max(240, (screenH - insets.top - insets.bottom) * 0.92);
 
   async function shareAsText() {
-    const lines = prs.map(
-      (p) => `${p.exercise}: ${p.prevBest}${unit} → ${p.e}${unit}${p.weight != null ? ` (${p.weight}${unit} × ${p.reps})` : ''}`
-    );
+    // p.e/p.prevBest/p.weight vêm do backend em kg
+    const lines = prs.map((p) => {
+      const e = round1(kgToUnit(p.e, unit));
+      const prevBest = round1(kgToUnit(p.prevBest, unit));
+      const weight = p.weight != null ? round1(kgToUnit(p.weight, unit)) : null;
+      return `${p.exercise}: ${prevBest}${unit} → ${e}${unit}${weight != null ? ` (${weight}${unit} × ${p.reps})` : ''}`;
+    });
     const message =
       prs.length === 1
         ? `Novo recorde pessoal no ASCENTIO! 🏆\n\n${lines[0]}`
@@ -157,7 +162,11 @@ export function PrCelebration({ visible, prs, unit, onClose }: Props) {
               showsVerticalScrollIndicator={false}
               bounces={false}
             >
-              {prs.map((p, i) => (
+              {prs.map((p, i) => {
+                const e = round1(kgToUnit(p.e, unit));
+                const prevBest = round1(kgToUnit(p.prevBest, unit));
+                const weight = p.weight != null ? round1(kgToUnit(p.weight, unit)) : null;
+                return (
                 <View
                   key={i}
                   style={{
@@ -177,9 +186,9 @@ export function PrCelebration({ visible, prs, unit, onClose }: Props) {
                     >
                       {p.exercise}
                     </Text>
-                    {p.weight != null && (
+                    {weight != null && (
                       <Text style={{ fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 12.5, color: colors.ink3 }}>
-                        {p.weight}{unit} × {p.reps}
+                        {weight}{unit} × {p.reps}
                       </Text>
                     )}
                   </View>
@@ -192,7 +201,7 @@ export function PrCelebration({ visible, prs, unit, onClose }: Props) {
                         textDecorationLine: 'line-through',
                       }}
                     >
-                      {p.prevBest}{unit}
+                      {prevBest}{unit}
                     </Text>
                     <Text style={{ color: colors.ink3, fontSize: 13 }}>→</Text>
                     <Text
@@ -203,12 +212,13 @@ export function PrCelebration({ visible, prs, unit, onClose }: Props) {
                         color: colors.accent,
                       }}
                     >
-                      {p.e}
+                      {e}
                       <Text style={{ fontSize: 13, fontFamily: 'HankenGrotesk_700Bold', fontWeight: '700' }}>{unit}</Text>
                     </Text>
                   </View>
                 </View>
-              ))}
+                );
+              })}
             </ScrollView>
 
             {/* action (rodapé fixo) */}

@@ -12,7 +12,7 @@ import {
   allExerciseNames,
   sessionsWithExercise,
 } from '@/store/strength.store';
-import { fmtDateShort, round1, epley1RM } from '@/lib/utils';
+import { fmtDateShort, round1, epley1RM, kgToUnit } from '@/lib/utils';
 
 function formatDuration(sec: number): string {
   const m = Math.floor(sec / 60);
@@ -150,7 +150,7 @@ export function StrengthDashboard({ sessions, templates, unit, onStartWorkout }:
     if (chartMode === 'overtime') {
       const pts = scopedAsc.map((s) => {
         const block = s.exercises.find((e) => e.name.toLowerCase() === selectedEx.toLowerCase());
-        return { date: s.date, value: block ? exercisePeak1RM(block.sets) : 0 };
+        return { date: s.date, value: block ? kgToUnit(exercisePeak1RM(block.sets), unit) : 0 };
       });
       const ma = movingAverageN(pts.map((p) => p.value), 3);
       chartDots = pts.map((p) => ({
@@ -172,9 +172,9 @@ export function StrengthDashboard({ sessions, templates, unit, onStartWorkout }:
         const sets = block?.sets ?? [];
         chartDots = sets.map((s, i) => ({
           x: i + 1,
-          y: epley1RM(s.weight, s.reps),
+          y: kgToUnit(epley1RM(s.weight, s.reps), unit),
           tipTitle: `Série ${i + 1}`,
-          tipSub: `${round1(s.weight)}${unit} × ${s.reps}`,
+          tipSub: `${round1(kgToUnit(s.weight, unit))}${unit} × ${s.reps}`,
         }));
         chartTrend = chartDots.map((d) => ({ x: d.x, y: d.y }));
         chartXTicks = chartDots.map((d) => ({ x: d.x, label: `S${d.x}` }));
@@ -187,7 +187,7 @@ export function StrengthDashboard({ sessions, templates, unit, onStartWorkout }:
     const scopedAsc = sessions
       .filter((s) => s.templateId === selectedTplId)
       .sort((a, b) => a.date.localeCompare(b.date));
-    const scores = scopedAsc.map((s) => sessionScore(s));
+    const scores = scopedAsc.map((s) => kgToUnit(sessionScore(s), unit));
     const ma = movingAverageN(scores, 3);
     chartDots = scopedAsc.map((s, i) => ({
       x: dateMs(s.date),
@@ -366,7 +366,7 @@ export function StrengthDashboard({ sessions, templates, unit, onStartWorkout }:
                 </Text>
               </View>
               <Text style={{ fontFamily: 'Archivo_800ExtraBold', fontSize: 22, letterSpacing: -0.5, color: i === 0 ? colors.accent : colors.ink }}>
-                {round1(l.e)}
+                {round1(kgToUnit(l.e, unit))}
                 <Text style={{ fontSize: 13, fontFamily: 'HankenGrotesk_700Bold', color: colors.ink3 }}>{unit}</Text>
               </Text>
             </View>

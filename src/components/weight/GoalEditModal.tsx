@@ -5,7 +5,7 @@ import { Btn } from '@/components/shared/Btn';
 import { Stepper } from '@/components/shared/Stepper';
 import { Field } from '@/components/shared/Field';
 import { useTheme } from '@/theme';
-import { round1 } from '@/lib/utils';
+import { round1, kgToUnit, unitToKg } from '@/lib/utils';
 
 type GoalType = 'lose' | 'strength' | 'maintain';
 
@@ -26,7 +26,7 @@ type Props = {
 
 export function GoalEditModal({ visible, unit, goal, goalType, onSave, onClose }: Props) {
   const { colors, radius } = useTheme();
-  const [g, setG] = React.useState(goal);
+  const [g, setG] = React.useState(round1(kgToUnit(goal, unit)));
   const [gt, setGt] = React.useState<GoalType>(goalType);
   const minW = unit === 'kg' ? 30 : 66;
   const maxW = unit === 'kg' ? 250 : 550;
@@ -40,7 +40,7 @@ export function GoalEditModal({ visible, unit, goal, goalType, onSave, onClose }
         <Btn
           kind="primary"
           full
-          onPress={() => onSave(round1(Math.min(maxW, Math.max(minW, g))), gt)}
+          onPress={() => onSave(round1(unitToKg(Math.min(maxW, Math.max(minW, g)), unit)), gt)}
         >
           Salvar meta
         </Btn>

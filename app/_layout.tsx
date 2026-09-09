@@ -38,7 +38,6 @@ import {
 import { stashOrphanedWorkout } from '@/lib/orphaned-session';
 import { getLastUser } from '@/lib/last-user';
 import { OfflineSync } from '@/components/OfflineSync';
-import { OfflineBanner } from '@/components/OfflineBanner';
 import { StripeProvider } from '@stripe/stripe-react-native';
 import { PostHogProvider } from 'posthog-react-native';
 import { posthog, identify } from '@/lib/analytics';
@@ -138,9 +137,11 @@ export default function RootLayout() {
 
   // Ao trocar de conta no mesmo aparelho, zera o cache persistido de quem logou
   // antes (o persist-client restaura o último cache salvo, seja de quem for).
+  // Só roda depois que a restauração do disco terminar (`cacheRestored`), pra não
+  // correr em paralelo com ela e decidir se limpa o cache antes dele existir.
   React.useEffect(() => {
-    if (userId) void reconcileCacheOwner(queryClient, userId);
-  }, [userId]);
+    if (userId && cacheRestored) void reconcileCacheOwner(queryClient, userId);
+  }, [userId, cacheRestored]);
 
   React.useEffect(() => {
     if (strengthHydrated) return;
@@ -295,7 +296,6 @@ export default function RootLayout() {
                   </Stack>
                   <GlobalPrCelebration />
                   <OfflineSync />
-                  <OfflineBanner />
                 </>
               ) : (
                 <BootScreen accent={accent} />

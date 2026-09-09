@@ -5,6 +5,7 @@ import { round1 } from '@/lib/utils';
 import { useStrengthStore, type ActiveSession } from '@/store/strength.store';
 import type {
   StudentProfile,
+  Workout,
   WorkoutSessionSnapshot,
   WorkoutSessionSyncResult,
   WorkoutStatus,
@@ -40,6 +41,46 @@ export function buildWorkoutSnapshot(
         })),
       })),
   };
+}
+
+/**
+ * Constrói uma entrada otimista de `['workouts']` a partir da sessão local, pro
+ * treino não sumir da lista enquanto o reenvio não teve sucesso. Usa `session.id`
+ * como `id` — o mesmo id usado como `clientId` no PUT idempotente — então quando
+ * o reenvio dá certo, `invalidateQueries(['workouts'])` refaz o fetch e troca o
+ * array inteiro pelo dado real, sem risco de duplicata.
+ */
+export function buildOptimisticWorkout(session: ActiveSession): Workout {
+  const snapshot = buildWorkoutSnapshot(session, 'COMPLETED');
+  return {
+    id: session.id,
+    performedAt: snapshot.performedAt,
+    durationSec: snapshot.durationSec,
+    templateId: snapshot.templateId ?? null,
+    templateName: snapshot.templateName ?? null,
+    programId: snapshot.programId ?? null,
+    programName: snapshot.programName ?? null,
+    exercises: snapshot.exercises.map((ex) => ({
+      name: ex.name,
+      sets: ex.sets.map((s) => ({
+        setNumber: s.setNumber,
+        setType: s.setType,
+        reps: s.reps,
+        weight: s.weight,
+      })),
+    })),
+    prs: [], // desconhecido até o servidor responder — a celebração de PR é tratada à parte
+  };
+}
+
+/** Insere/atualiza um treino otimista em `['workouts']` (só sessões próprias — as
+ *  lançadas pelo coach em nome de um aluno vivem em `['dashboard','student',id]`,
+ *  uma estrutura agregada; refletir otimista lá é um problema à parte). */
+export function upsertOptimisticWorkout(qc: QueryClient, workout: Workout): void {
+  qc.setQueryData<Workout[]>(['workouts'], (prev = []) => [
+    ...prev.filter((w) => w.id !== workout.id),
+    workout,
+  ]);
 }
 
 function sessionUrl(session: Pick<ActiveSession, 'id' | 'forStudent'>): string {
@@ -117,6 +158,9 @@ export async function flushPendingWorkout(qc: QueryClient): Promise<void> {
         useStrengthStore.getState().setActiveSession(null);
         qc.invalidateQueries({ queryKey: ['workouts'] });
       }
+    } else if (session.status === 'COMPLETED' && !session.forStudent) {
+      // ainda offline — reflete o treino na lista mesmo sem ter sincronizado.
+      upsertOptimisticWorkout(qc, buildOptimisticWorkout(session));
     }
   } finally {
     flushing = false;
@@ -142,6 +186,10 @@ export async function flushOrphanedWorkout(
     }
     return true;
   } catch (err) {
+    if (isNetworkError(err) && !session.forStudent) {
+      // ainda offline — reflete o treino na lista mesmo sem ter sincronizado.
+      upsertOptimisticWorkout(qc, buildOptimisticWorkout({ ...session, status: 'COMPLETED' }));
+    }
     return !isNetworkError(err); // rede: falhou, tentar de novo depois
   }
 }

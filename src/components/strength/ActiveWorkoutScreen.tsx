@@ -13,7 +13,12 @@ import { useStudentProfile } from '@/api/hooks/useStudentProfile';
 import { useWorkouts } from '@/api/hooks/useWorkouts';
 import { useSyncWorkoutSession, useDiscardWorkoutSession } from '@/api/hooks/useWorkoutSession';
 import { useStrengthStore } from '@/store/strength.store';
-import { buildWorkoutSnapshot, flushPendingWorkout } from '@/lib/workout-sync';
+import {
+  buildWorkoutSnapshot,
+  buildOptimisticWorkout,
+  upsertOptimisticWorkout,
+  flushPendingWorkout,
+} from '@/lib/workout-sync';
 import { round1 } from '@/lib/utils';
 import { debounce } from '@/lib/debounce';
 import { capture } from '@/lib/analytics';
@@ -185,8 +190,16 @@ export function ActiveWorkoutScreen({ homeHref }: { homeHref: '/(app)' | '/(coac
     } catch {
       // offline: a sessão com status COMPLETED continua persistida em disco e é
       // reenviada automaticamente pelo <OfflineSync> global (ou pelo efeito de
-      // mount desta tela) quando a rede voltar. Sai da tela otimisticamente —
-      // não faz sentido prender o usuário esperando a rede.
+      // mount desta tela) quando a rede voltar. Reflete otimista em ['workouts']
+      // pro treino não sumir da lista enquanto isso — `activeSession` capturado
+      // no closure pode não ter o status atualizado ainda (updateActiveSession é
+      // assíncrono), por isso o status é forçado aqui.
+      if (!forStudent) {
+        upsertOptimisticWorkout(
+          queryClient,
+          buildOptimisticWorkout({ ...activeSession, status: 'COMPLETED' }),
+        );
+      }
       safeBack();
     }
   }

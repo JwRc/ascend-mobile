@@ -43,7 +43,7 @@ import {
   movingAverage,
   weighInStreak,
   last7Days,
-  convert,
+  kgToUnit,
   fmtDateLong,
   todayISO,
 } from '@/lib/utils';
@@ -207,9 +207,9 @@ export default function DashboardScreen() {
   const toGo = round1(Math.abs(latestMA - goal));
   const losing = goal <= startWeight;
 
+  // entries/latestMA já estão em kg (como o backend retorna) — IMC não depende da unidade de exibição.
   const heightM = (studentProfile?.heightCm ?? 170) / 100;
-  const kg = convert(latestMA, u, 'kg');
-  const bmi = round1(kg / (heightM * heightM));
+  const bmi = round1(latestMA / (heightM * heightM));
 
   const streak = weighInStreak(entries);
   const last7 = last7Days(entries);
@@ -608,14 +608,14 @@ export default function DashboardScreen() {
 
               <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 8, marginTop: 6, marginBottom: 4 }}>
                 <Text style={{ fontFamily: 'Archivo_900Black', fontSize: 80, lineHeight: 72, letterSpacing: -1, color: colors.ink }}>
-                  {ma.length ? round1(latestMA) : '—'}
+                  {ma.length ? round1(kgToUnit(latestMA, u)) : '—'}
                 </Text>
                 <Text style={{ fontFamily: 'Archivo_800ExtraBold', fontSize: 24, color: colors.ink3 }}>{u}</Text>
               </View>
 
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                 <Text style={{ fontSize: 14, color: trendColor }}>{weekDelta < 0 ? '▾' : weekDelta > 0 ? '▴' : '—'}</Text>
-                <Text style={{ fontFamily: 'HankenGrotesk_700Bold', fontSize: 15, color: trendColor }}>{Math.abs(weekDelta)}{u}</Text>
+                <Text style={{ fontFamily: 'HankenGrotesk_700Bold', fontSize: 15, color: trendColor }}>{round1(Math.abs(kgToUnit(weekDelta, u)))}{u}</Text>
                 <Text style={{ fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 15, color: colors.ink3 }}>esta semana</Text>
               </View>
 
@@ -626,7 +626,7 @@ export default function DashboardScreen() {
                     Último registro
                   </Text>
                   <Text style={{ fontFamily: 'Archivo_800ExtraBold', fontSize: 26, letterSpacing: -0.5, color: colors.ink }}>
-                    {latest ? round1(latest.weight) : '—'}
+                    {latest ? round1(kgToUnit(latest.weight, u)) : '—'}
                     <Text style={{ fontSize: 14, color: colors.ink3, fontFamily: 'HankenGrotesk_700Bold' }}>{' '}{u}</Text>
                   </Text>
                 </View>
@@ -692,13 +692,13 @@ export default function DashboardScreen() {
               {recent.map((e, i) => {
                 const idxInSorted = entries.findIndex((x) => x.date === e.date);
                 const prev = idxInSorted > 0 ? entries[idxInSorted - 1].weight : null;
-                const delta = prev != null ? round1(e.weight - prev) : null;
+                const delta = prev != null ? round1(kgToUnit(e.weight - prev, u)) : null;
                 const deltaColor = delta == null ? colors.ink3 : delta < 0 ? semanticColors.success : delta > 0 ? semanticColors.warning : colors.ink3;
                 return (
                   <View key={e.date} style={{ flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 13, borderBottomWidth: i < recent.length - 1 ? 1.5 : 0, borderBottomColor: colors.line }}>
                     <Text style={{ flex: 1, fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 14.5, color: colors.ink2 }}>{fmtDateLong(e.date)}</Text>
                     <Text style={{ fontFamily: 'Archivo_800ExtraBold', fontSize: 20, letterSpacing: -0.3, color: colors.ink }}>
-                      {round1(e.weight)}<Text style={{ fontSize: 12, fontFamily: 'HankenGrotesk_700Bold', color: colors.ink3 }}>{u}</Text>
+                      {round1(kgToUnit(e.weight, u))}<Text style={{ fontSize: 12, fontFamily: 'HankenGrotesk_700Bold', color: colors.ink3 }}>{u}</Text>
                     </Text>
                     <Text style={{ fontFamily: 'HankenGrotesk_700Bold', fontSize: 13.5, minWidth: 52, textAlign: 'right', color: deltaColor }}>
                       {delta == null ? '—' : (delta > 0 ? '+' : '') + delta}
@@ -719,7 +719,7 @@ export default function DashboardScreen() {
             <Card>
               <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between' }}>
                 <Text style={{ fontFamily: 'HankenGrotesk_700Bold', fontSize: 13, letterSpacing: 0.8, textTransform: 'uppercase', color: colors.ink2 }}>
-                  Meta · {round1(goal)}{u}
+                  Meta · {round1(kgToUnit(goal, u))}{u}
                 </Text>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                   <Text style={{ fontFamily: 'Archivo_900Black', fontSize: 30, letterSpacing: -1, color: colors.ink }}>{pct}%</Text>
@@ -738,7 +738,7 @@ export default function DashboardScreen() {
 
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
                 <Text style={{ fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 13.5, color: colors.ink3 }}>
-                  {toGo <= 0.05 ? 'Meta atingida — ótimo trabalho.' : `${toGo}${u} para a meta · ${losing ? 'em queda' : 'subindo'}`}
+                  {toGo <= 0.05 ? 'Meta atingida — ótimo trabalho.' : `${round1(kgToUnit(toGo, u))}${u} para a meta · ${losing ? 'em queda' : 'subindo'}`}
                 </Text>
                 <Text style={{ fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 13, color: colors.ink3 }}>
                   {goalSetBy === 'COACH' ? 'Definido pelo coach' : 'Definido por você'}
@@ -797,7 +797,7 @@ export default function DashboardScreen() {
       <GoalEditModal
         visible={editingGoal}
         unit={u}
-        goal={round1(goal)}
+        goal={goal}
         goalType={goalLocalType}
         onSave={(newGoal, newType) => {
           setGoalMutation.mutate({ targetWeight: newGoal, goalType: localGoalTypeToApi(newType) });

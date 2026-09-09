@@ -3,7 +3,7 @@ import { View, Text, TextInput, TouchableOpacity } from 'react-native';
 import { useTheme } from '@/theme';
 import { Btn } from '@/components/shared/Btn';
 import { WorkSet, SetType } from '@/store/strength.store';
-import { round1, epley1RM } from '@/lib/utils';
+import { round1, epley1RM, kgToUnit, unitToKg } from '@/lib/utils';
 
 const SET_TYPES: { value: SetType; label: string }[] = [
   { value: null, label: 'Auto' },
@@ -15,6 +15,7 @@ const SET_TYPES: { value: SetType; label: string }[] = [
 
 type Props = {
   unit: 'kg' | 'lb';
+  /** Sempre em kg — mesma convenção do backend e do WorkSet armazenado. */
   defaultWeight: number;
   defaultReps: number;
   onAdd: (set: Omit<WorkSet, 'id'>) => void;
@@ -24,7 +25,7 @@ type Props = {
 export function AddSetForm({ unit, defaultWeight, defaultReps, onAdd, onCancel }: Props) {
   const { colors, radius } = useTheme();
   const [type, setType] = React.useState<SetType>(null);
-  const [weight, setWeight] = React.useState(String(defaultWeight));
+  const [weight, setWeight] = React.useState(String(round1(kgToUnit(defaultWeight, unit))));
   const [reps, setReps] = React.useState(String(defaultReps));
 
   const w = parseFloat(weight) || 0;
@@ -33,7 +34,8 @@ export function AddSetForm({ unit, defaultWeight, defaultReps, onAdd, onCancel }
 
   function confirm() {
     if (w <= 0 || r <= 0) return;
-    onAdd({ weight: round1(w), reps: r, type });
+    // `w` está na unidade de exibição — o WorkSet armazena sempre em kg.
+    onAdd({ weight: round1(unitToKg(w, unit)), reps: r, type });
   }
 
   return (

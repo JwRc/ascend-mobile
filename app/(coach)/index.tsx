@@ -96,6 +96,22 @@ function dashboardToStats(d: CoachDashboard): CoachStats {
 
 // ─── Screen ──────────────────────────────────────────────────────────────────
 
+/** Spinner (online) ou aviso de "sem dado salvo ainda" (offline) — usado por aba,
+ *  só enquanto aquela aba específica não tem nem cache nem resposta pra si mesma. */
+function LoadingOrOfflineFallback({ online, colors }: { online: boolean; colors: any }) {
+  return (
+    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 }}>
+      {online ? (
+        <ActivityIndicator color={colors.accent} />
+      ) : (
+        <Text style={{ fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 14, color: colors.ink3, textAlign: 'center', lineHeight: 20 }}>
+          Sem conexão e sem dados salvos ainda.{'\n'}Conecte-se uma vez para usar o app offline.
+        </Text>
+      )}
+    </View>
+  );
+}
+
 export default function CoachHomeScreen() {
   const { colors } = useTheme();
   const router = useRouter();
@@ -231,10 +247,13 @@ export default function CoachHomeScreen() {
     });
   }
 
-  // Só bloqueia quando não há nada em cache. Com o cache persistido isso quase
-  // nunca acontece depois da primeira sync.
-  const hasCache = !!dashboard || studentsRaw.length > 0 || programsRaw.length > 0;
-  const isLoading = (dashLoading || studentsLoading || programsLoading) && !hasCache;
+  // Gate independente por aba (mesmo padrão de athlete/[id].tsx: isLoading && !data)
+  // — cada uma só bloqueia enquanto NÃO tiver nem cache nem resposta pra ela mesma.
+  // Antes disso era um `hasCache` cruzando as 3 queries: bastava uma ter cache pra
+  // liberar a tela inteira, mostrando as outras abas vazias em vez de carregando.
+  const dashboardLoading = dashLoading && !dashboard;
+  const rosterLoading = studentsLoading && studentsRaw.length === 0;
+  const programsTabLoading = programsLoading && programsRaw.length === 0;
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }}>
@@ -406,19 +425,11 @@ export default function CoachHomeScreen() {
       </View>
 
       {/* ── Content ──────────────────────────────────────────────────── */}
-      {isLoading ? (
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 }}>
-          {isOnline ? (
-            <ActivityIndicator color={colors.accent} />
-          ) : (
-            <Text style={{ fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 14, color: colors.ink3, textAlign: 'center', lineHeight: 20 }}>
-              Sem conexão e sem dados salvos ainda.{'\n'}Conecte-se uma vez para usar o app offline.
-            </Text>
-          )}
-        </View>
-      ) : (
-        <View style={{ flex: 1 }}>
-          {tab === 'overview' && stats && (
+      <View style={{ flex: 1 }}>
+        {tab === 'overview' &&
+          (dashboardLoading ? (
+            <LoadingOrOfflineFallback online={isOnline} colors={colors} />
+          ) : stats ? (
             <CoachOverview
               stats={stats}
               onOpenAthlete={openAthlete}
@@ -426,8 +437,15 @@ export default function CoachHomeScreen() {
               refreshing={refreshing}
               onRefresh={onRefresh}
             />
-          )}
-          {tab === 'roster' && (
+          ) : (
+            // dashboard terminou de responder (ou já tentou e não há cache) mas
+            // segue sem dado — evita a aba renderizar em branco.
+            <LoadingOrOfflineFallback online={isOnline} colors={colors} />
+          ))}
+        {tab === 'roster' &&
+          (rosterLoading ? (
+            <LoadingOrOfflineFallback online={isOnline} colors={colors} />
+          ) : (
             <CoachRoster
               athletes={athletes}
               initialFilter={rosterFilter as any}
@@ -436,8 +454,11 @@ export default function CoachHomeScreen() {
               refreshing={refreshing}
               onRefresh={onRefresh}
             />
-          )}
-          {tab === 'programs' && (
+          ))}
+        {tab === 'programs' &&
+          (programsTabLoading ? (
+            <LoadingOrOfflineFallback online={isOnline} colors={colors} />
+          ) : (
             <CoachPrograms
               programs={programs}
               athletes={athletes}
@@ -448,9 +469,8 @@ export default function CoachHomeScreen() {
               refreshing={refreshing}
               onRefresh={onRefresh}
             />
-          )}
-        </View>
-      )}
+          ))}
+      </View>
 
       {/* ── Invite modal ─────────────────────────────────────────────── */}
       <InviteModal
