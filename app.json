@@ -26,7 +26,7 @@
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.anonymous.ascentiomobile"
+      "package": "com.ascentio.mobile"
     },
     "web": {
       "favicon": "./assets/favicon.png",
