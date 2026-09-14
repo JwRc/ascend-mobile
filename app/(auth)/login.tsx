@@ -116,6 +116,7 @@ export default function LoginScreen() {
         provider: 'google',
         callbackURL: '/',
       });
+      console.log('[google-login] signIn.social resolved, error:', JSON.stringify(signInError));
       if (signInError) {
         setError(signInError.message ?? 'Não foi possível entrar com Google.');
         return;
@@ -125,12 +126,18 @@ export default function LoginScreen() {
         fetchOptions: {
           onSuccess(context: { response: Response }) {
             authToken = context.response.headers.get('set-auth-token');
+            console.log('[google-login] getSession onSuccess, set-auth-token:', authToken);
+          },
+          onError(context: { error: unknown; response: Response | null }) {
+            console.log('[google-login] getSession onError:', JSON.stringify(context.error), context.response?.status);
           },
         },
       });
+      console.log('[google-login] after getSession, authToken:', authToken);
       if (!authToken) return; // usuário cancelou o login no navegador
       await handleSocialSession(authToken);
-    } catch {
+    } catch (e) {
+      console.log('[google-login] caught exception:', e);
       setError('Não foi possível entrar com Google.');
     } finally {
       setSocialLoading(null);
