@@ -108,10 +108,18 @@ export default function LoginScreen() {
       // O plugin expoClient (src/lib/auth.ts) intercepta essa chamada: abre o
       // navegador externo com a URL de autorização, espera o usuário
       // autenticar e captura o retorno via ascentio://auth-callback — tudo
-      // isso acontece antes dessa promise resolver. Ele nunca reporta erro
-      // aqui mesmo se o usuário cancelar no navegador, então a confirmação
-      // real de sucesso é o `authToken` abaixo.
-      await authClient.signIn.social({ provider: 'google', callbackURL: '/' });
+      // isso acontece antes dessa promise resolver. Se o navegador nunca
+      // chega a abrir (ex: backend rejeitou o callbackURL), essa chamada
+      // ainda resolve normalmente com `error` preenchido — por isso
+      // checamos `signInError` explicitamente em vez de só confiar em catch.
+      const { error: signInError } = await authClient.signIn.social({
+        provider: 'google',
+        callbackURL: '/',
+      });
+      if (signInError) {
+        setError(signInError.message ?? 'Não foi possível entrar com Google.');
+        return;
+      }
       let authToken: string | null = null;
       await authClient.getSession({
         fetchOptions: {
