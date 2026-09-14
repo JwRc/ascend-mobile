@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import * as AppleAuthentication from 'expo-apple-authentication';
+import { parseSetCookieHeader } from '@better-auth/expo/client';
 import { useTheme } from '@/theme';
 import { Logo } from '@/components/shared/Logo';
 import { GoogleIcon } from '@/components/shared/GoogleIcon';
@@ -105,9 +106,13 @@ export default function LoginScreen() {
     setSocialLoading('google');
     setError('');
     try {
-      // DIAGNÓSTICO TEMPORÁRIO: reimplementa manualmente o que o plugin
-      // expoClient faz por baixo dos panos, só que com logs em cada etapa —
-      // pra descobrir com que resultado o WebBrowser realmente fecha.
+      // Feito na mão em vez de authClient.signIn.social(...): o plugin
+      // expoClient (@better-auth/expo) deveria fazer exatamente isso sozinho,
+      // mas na prática a sessão nunca ficava disponível depois (set-auth-token
+      // sempre vinha nulo) sem dar pra instrumentar o hook interno dele pra
+      // achar o motivo. Esse fluxo explícito (sign-in/social →
+      // expo-authorization-proxy → WebBrowser → extrai o cookie da URL de
+      // retorno) faz a mesma coisa e funciona de ponta a ponta.
       const callbackURL = `${APP_SCHEME}:///`;
       const signInRes = await fetch(`${BETTER_AUTH_URL}/sign-in/social`, {
         method: 'POST',
@@ -115,26 +120,29 @@ export default function LoginScreen() {
         body: JSON.stringify({ provider: 'google', callbackURL }),
       });
       const signInData = await signInRes.json().catch(() => ({}));
-      console.log('[google-login] sign-in/social status:', signInRes.status, 'body:', JSON.stringify(signInData));
       const authorizationURL = signInData?.url;
       if (!authorizationURL) {
         setError('Não foi possível iniciar o login com Google.');
         return;
       }
       const proxyURL = `${BETTER_AUTH_URL}/expo-authorization-proxy?${new URLSearchParams({ authorizationURL }).toString()}`;
-      console.log('[google-login] opening browser at proxyURL:', proxyURL, 'watching for prefix:', callbackURL);
       const result = await WebBrowser.openAuthSessionAsync(proxyURL, callbackURL);
-      console.log('[google-login] WebBrowser result:', JSON.stringify(result));
-      if (result.type !== 'success') {
-        setError(`Login cancelado ou não concluído (${result.type}).`);
+      if (result.type !== 'success') return; // usuário cancelou no navegador
+      const cookieParam = new URL(result.url).searchParams.get('cookie');
+      if (!cookieParam) {
+        setError('Não foi possível concluir o login com Google.');
         return;
       }
-      const cookie = new URL(result.url).searchParams.get('cookie');
-      console.log('[google-login] cookie param on return:', cookie);
-      setError(cookie ? 'DIAGNÓSTICO: cookie recebido, veja o console.' : 'DIAGNÓSTICO: voltou sem cookie, veja o console.');
-      return;
-    } catch (e) {
-      console.log('[google-login] caught exception:', e);
+      let authToken: string | null = null;
+      parseSetCookieHeader(cookieParam).forEach((details, name) => {
+        if (name.endsWith('session_token')) authToken = details.value;
+      });
+      if (!authToken) {
+        setError('Não foi possível concluir o login com Google.');
+        return;
+      }
+      await handleSocialSession(authToken);
+    } catch {
       setError('Não foi possível entrar com Google.');
     } finally {
       setSocialLoading(null);

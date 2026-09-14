@@ -1,21 +1,17 @@
 import { createAuthClient } from 'better-auth/client';
-import { expoClient } from '@better-auth/expo/client';
 import * as SecureStore from 'expo-secure-store';
 
+// O login social (Google) não usa o plugin expoClient — na prática ele nunca
+// deixava a sessão disponível depois do redirect (sem dar pra instrumentar o
+// hook interno pra achar o motivo). handleGoogleLogin (app/(auth)/login.tsx)
+// faz o mesmo fluxo (sign-in/social → expo-authorization-proxy → WebBrowser)
+// na mão, só usando parseSetCookieHeader de @better-auth/expo/client pra
+// extrair o token da URL de retorno. O plugin expo() no backend
+// (src/auth/auth.ts) continua necessário — é ele que expõe esse endpoint de
+// proxy e anexa o cookie de sessão na URL de retorno.
 export const authClient = createAuthClient({
   baseURL: process.env.EXPO_PUBLIC_BETTER_AUTH_URL ?? '',
   basePath: '/auth',
-  plugins: [
-    // Login social (Google): abre a autorização num navegador externo e
-    // recupera a sessão de volta via ascentio://auth-callback — ver
-    // handleGoogleLogin em app/(auth)/login.tsx e o plugin expo() espelhado
-    // no backend (src/auth/auth.ts).
-    expoClient({
-      scheme: 'ascentio',
-      storagePrefix: 'ascentio',
-      storage: SecureStore,
-    }),
-  ],
   fetchOptions: {
     customFetchImpl: async (url, options) => {
       const token = await SecureStore.getItemAsync('auth_token');
