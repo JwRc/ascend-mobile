@@ -1,9 +1,21 @@
 import { createAuthClient } from 'better-auth/client';
+import { expoClient } from '@better-auth/expo/client';
 import * as SecureStore from 'expo-secure-store';
 
 export const authClient = createAuthClient({
   baseURL: process.env.EXPO_PUBLIC_BETTER_AUTH_URL ?? '',
   basePath: '/auth',
+  plugins: [
+    // Login social (Google): abre a autorização num navegador externo e
+    // recupera a sessão de volta via ascentio://auth-callback — ver
+    // handleGoogleLogin em app/(auth)/login.tsx e o plugin expo() espelhado
+    // no backend (src/auth/auth.ts).
+    expoClient({
+      scheme: 'ascentio',
+      storagePrefix: 'ascentio',
+      storage: SecureStore,
+    }),
+  ],
   fetchOptions: {
     customFetchImpl: async (url, options) => {
       const token = await SecureStore.getItemAsync('auth_token');

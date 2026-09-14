@@ -105,24 +105,23 @@ export default function LoginScreen() {
     setSocialLoading('google');
     setError('');
     try {
-      const callbackURL = `${APP_SCHEME}://auth-callback`;
-      // Request the OAuth redirect URL from better-auth
-      const res = await fetch(`${BETTER_AUTH_URL}/auth/sign-in/social`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ provider: 'google', callbackURL }),
-        redirect: 'manual',
+      // O plugin expoClient (src/lib/auth.ts) intercepta essa chamada: abre o
+      // navegador externo com a URL de autorização, espera o usuário
+      // autenticar e captura o retorno via ascentio://auth-callback — tudo
+      // isso acontece antes dessa promise resolver. Ele nunca reporta erro
+      // aqui mesmo se o usuário cancelar no navegador, então a confirmação
+      // real de sucesso é o `authToken` abaixo.
+      await authClient.signIn.social({ provider: 'google', callbackURL: '/' });
+      let authToken: string | null = null;
+      await authClient.getSession({
+        fetchOptions: {
+          onSuccess(context: { response: Response }) {
+            authToken = context.response.headers.get('set-auth-token');
+          },
+        },
       });
-      const location = res.headers.get('location') ?? (await res.json().catch(() => ({}))).url;
-      if (!location) {
-        setError('Google ainda não configurado. Aguarde.');
-        return;
-      }
-      const result = await WebBrowser.openAuthSessionAsync(location, callbackURL);
-      if (result.type === 'success') {
-        const token = new URL(result.url).searchParams.get('token');
-        if (token) await handleSocialSession(token);
-      }
+      if (!authToken) return; // usuário cancelou o login no navegador
+      await handleSocialSession(authToken);
     } catch {
       setError('Não foi possível entrar com Google.');
     } finally {
@@ -145,7 +144,7 @@ export default function LoginScreen() {
         return;
       }
       // Send the identity token to better-auth for verification
-      const res = await fetch(`${BETTER_AUTH_URL}/auth/sign-in/social`, {
+      const res = await fetch(`${BETTER_AUTH_URL}/sign-in/social`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
