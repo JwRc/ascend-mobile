@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import * as AppleAuthentication from 'expo-apple-authentication';
+import { parseSetCookieHeader } from '@better-auth/expo/client';
 import { useTheme } from '@/theme';
 import { Logo } from '@/components/shared/Logo';
 import { GoogleIcon } from '@/components/shared/GoogleIcon';
@@ -105,24 +106,42 @@ export default function LoginScreen() {
     setSocialLoading('google');
     setError('');
     try {
-      const callbackURL = `${APP_SCHEME}://auth-callback`;
-      // Request the OAuth redirect URL from better-auth
-      const res = await fetch(`${BETTER_AUTH_URL}/auth/sign-in/social`, {
+      // Feito na mão em vez de authClient.signIn.social(...): o plugin
+      // expoClient (@better-auth/expo) deveria fazer exatamente isso sozinho,
+      // mas na prática a sessão nunca ficava disponível depois (set-auth-token
+      // sempre vinha nulo) sem dar pra instrumentar o hook interno dele pra
+      // achar o motivo. Esse fluxo explícito (sign-in/social →
+      // expo-authorization-proxy → WebBrowser → extrai o cookie da URL de
+      // retorno) faz a mesma coisa e funciona de ponta a ponta.
+      const callbackURL = `${APP_SCHEME}:///`;
+      const signInRes = await fetch(`${BETTER_AUTH_URL}/sign-in/social`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ provider: 'google', callbackURL }),
-        redirect: 'manual',
       });
-      const location = res.headers.get('location') ?? (await res.json().catch(() => ({}))).url;
-      if (!location) {
-        setError('Google ainda não configurado. Aguarde.');
+      const signInData = await signInRes.json().catch(() => ({}));
+      const authorizationURL = signInData?.url;
+      if (!authorizationURL) {
+        setError('Não foi possível iniciar o login com Google.');
         return;
       }
-      const result = await WebBrowser.openAuthSessionAsync(location, callbackURL);
-      if (result.type === 'success') {
-        const token = new URL(result.url).searchParams.get('token');
-        if (token) await handleSocialSession(token);
+      const proxyURL = `${BETTER_AUTH_URL}/expo-authorization-proxy?${new URLSearchParams({ authorizationURL }).toString()}`;
+      const result = await WebBrowser.openAuthSessionAsync(proxyURL, callbackURL);
+      if (result.type !== 'success') return; // usuário cancelou no navegador
+      const cookieParam = new URL(result.url).searchParams.get('cookie');
+      if (!cookieParam) {
+        setError('Não foi possível concluir o login com Google.');
+        return;
       }
+      let authToken: string | null = null;
+      parseSetCookieHeader(cookieParam).forEach((details, name) => {
+        if (name.endsWith('session_token')) authToken = details.value;
+      });
+      if (!authToken) {
+        setError('Não foi possível concluir o login com Google.');
+        return;
+      }
+      await handleSocialSession(authToken);
     } catch {
       setError('Não foi possível entrar com Google.');
     } finally {
@@ -145,7 +164,7 @@ export default function LoginScreen() {
         return;
       }
       // Send the identity token to better-auth for verification
-      const res = await fetch(`${BETTER_AUTH_URL}/auth/sign-in/social`, {
+      const res = await fetch(`${BETTER_AUTH_URL}/sign-in/social`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
