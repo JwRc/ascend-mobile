@@ -137,10 +137,17 @@ export default function InvitedSignupScreen() {
         goalType: d.goalType === 'lose' ? 'LOSE' : d.goalType === 'strength' ? 'GAIN' : 'MAINTAIN',
       });
 
+      await api.post('/users/me/complete-onboarding', {});
+
       const { data: sessionData } = await authClient.getSession();
       const u = (sessionData as any)?.user;
       const role: UserRole = 'STUDENT';
-      setSession(u?.id ?? '', u?.email ?? d.email, role, { name: u?.name ?? d.name ?? null });
+      setSession(u?.id ?? '', u?.email ?? d.email, role, {
+        name: u?.name ?? d.name ?? null,
+        tenantId: u?.tenantId ?? null,
+        userPlan: u?.userPlan ?? null,
+        onboardingCompleted: true,
+      });
       await refreshRememberMeToken(true);
 
       router.replace('/(app)');

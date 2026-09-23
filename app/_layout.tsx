@@ -26,6 +26,7 @@ import { useUIStore } from '@/store/ui.store';
 import { useAuthStore, type UserRole } from '@/store/auth.store';
 import { useStrengthStore } from '@/store/strength.store';
 import { GlobalPrCelebration } from '@/components/strength/GlobalPrCelebration';
+import { needsOnboarding } from '@/lib/onboarding';
 import {
   authClient,
   getRememberMeToken,
@@ -180,12 +181,32 @@ export default function RootLayout() {
       try {
         const { data } = await getSessionWithRetry();
         if (data?.session && data?.user) {
-          const u = data.user as { id: string; email: string; name?: string | null; role?: string; tenantId?: string | null };
+          const u = data.user as {
+            id: string;
+            email: string;
+            name?: string | null;
+            role?: string;
+            tenantId?: string | null;
+            userPlan?: 'STANDALONE' | null;
+            onboardingCompletedAt?: string | null;
+          };
           const role: UserRole = u.role === 'COACH' ? 'COACH' : 'STUDENT';
-          setSession(u.id, u.email, role, { name: u.name ?? null, tenantId: u.tenantId ?? null });
+          const onboardingCompleted = u.onboardingCompletedAt != null;
+          setSession(u.id, u.email, role, {
+            name: u.name ?? null,
+            tenantId: u.tenantId ?? null,
+            userPlan: u.userPlan ?? null,
+            onboardingCompleted,
+          });
           identify(u.id, role.toLowerCase());
           void registerPushToken();
           void refreshRememberMeToken(true);
+          // Recupera quem ficou preso no meio do onboarding (login social sem
+          // wizard, ou app fechado no meio do wizard de email/senha) — reavaliado
+          // a cada sincronização com o servidor, não só no login.
+          if (needsOnboarding({ role, tenantId: u.tenantId ?? null, userPlan: u.userPlan ?? null, onboardingCompleted })) {
+            router.replace('/(onboarding)');
+          }
           return true;
         }
         // Servidor respondeu mas não há sessão → derruba a sessão offline otimista
@@ -219,6 +240,10 @@ export default function RootLayout() {
             plan: claims.plan,
             offlineGraceUntil: claims.offlineGraceUntil,
             isOfflineSession: true,
+            // claims.onboardingCompleted pode não existir num JWT emitido antes
+            // desse campo existir — undefined vira null (tri-state "desconhecido",
+            // não bloqueia) em vez de false (bloquearia à toa).
+            onboardingCompleted: claims.onboardingCompleted ?? null,
           });
           identify(claims.userId, role.toLowerCase());
           void registerPushToken();

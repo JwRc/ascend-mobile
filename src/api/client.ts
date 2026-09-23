@@ -80,6 +80,13 @@ api.interceptors.response.use(
       return Promise.reject(err);
     }
 
+    if (err.response?.status === 403 && err.response?.data?.code === "ONBOARDING_INCOMPLETE") {
+      // Rede de segurança: alguém navegou pra uma rota autenticada sem passar
+      // pelo gate de onboarding (app/index.tsx, layouts de (app)/(coach)/(billing)).
+      router.replace("/(onboarding)");
+      return Promise.reject(err);
+    }
+
     if (err.response?.status === 401) {
       const stillValid = await hasLiveSession();
       if (!stillValid) {

@@ -18,7 +18,7 @@ export function useStudentProfile() {
 export function useUpdateStudentProfile() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (body: Partial<Pick<StudentProfile, 'name' | 'units' | 'heightCm' | 'activityLevel' | 'reminders'>>) => {
+    mutationFn: async (body: Partial<Pick<StudentProfile, 'name' | 'units' | 'heightCm' | 'activityLevel' | 'reminders' | 'startWeight'>>) => {
       try {
         const res = await api.patch<StudentProfile>('/students/me', body);
         return res.data;

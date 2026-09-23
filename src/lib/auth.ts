@@ -42,6 +42,7 @@ export type RememberMeClaims = {
   plan: 'BASE' | 'CUSTOM';
   subscriptionExpiresAt: number | null;
   offlineGraceUntil: number;
+  onboardingCompleted: boolean;
   iat: number;
   exp: number;
 };
