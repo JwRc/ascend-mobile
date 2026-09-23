@@ -17,10 +17,14 @@ type AuthState = {
   name: string | null;
   role: UserRole | null;
   tenantId: string | null;
+  userPlan: "STANDALONE" | null;
   plan: "BASE" | "CUSTOM" | null;
   offlineGraceUntil: number | null;
   isOfflineSession: boolean;
   subscriptionExpired: boolean;
+  // null = desconhecido (claim ausente numa sessão offline antiga) — ver
+  // src/lib/onboarding.ts needsOnboarding() para a semântica do tri-state.
+  onboardingCompleted: boolean | null;
   setSession: (
     userId: string,
     email: string,
@@ -28,14 +32,17 @@ type AuthState = {
     opts?: {
       name?: string | null;
       tenantId?: string | null;
+      userPlan?: "STANDALONE" | null;
       plan?: "BASE" | "CUSTOM";
       offlineGraceUntil?: number;
       isOfflineSession?: boolean;
+      onboardingCompleted?: boolean | null;
     },
   ) => void;
   clearSession: () => Promise<void>;
   markHydrated: () => void;
   setSubscriptionExpired: (val: boolean) => void;
+  setOnboardingCompleted: (val: boolean) => void;
 };
 
 export const useAuthStore = create<AuthState>((set, get) => ({
@@ -46,10 +53,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   name: null,
   role: null,
   tenantId: null,
+  userPlan: null,
   plan: null,
   offlineGraceUntil: null,
   isOfflineSession: false,
   subscriptionExpired: false,
+  onboardingCompleted: null,
 
   setSession: (userId, email, role, opts) => {
     // Guarda {userId, name} pro cold start offline mostrar o nome certo antes da
@@ -62,9 +71,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       name: opts?.name ?? null,
       role,
       tenantId: opts?.tenantId ?? null,
+      userPlan: opts?.userPlan ?? null,
       plan: opts?.plan ?? null,
       offlineGraceUntil: opts?.offlineGraceUntil ?? null,
       isOfflineSession: opts?.isOfflineSession ?? false,
+      onboardingCompleted: opts?.onboardingCompleted ?? null,
     });
   },
 
@@ -90,14 +101,18 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       name: null,
       role: null,
       tenantId: null,
+      userPlan: null,
       plan: null,
       offlineGraceUntil: null,
       isOfflineSession: false,
       subscriptionExpired: false,
+      onboardingCompleted: null,
     });
   },
 
   markHydrated: () => set({ hydrated: true }),
 
   setSubscriptionExpired: (val) => set({ subscriptionExpired: val }),
+
+  setOnboardingCompleted: (val) => set({ onboardingCompleted: val }),
 }));

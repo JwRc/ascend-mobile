@@ -6,14 +6,14 @@ import { useTheme } from '@/theme';
 import { Logo } from '@/components/shared/Logo';
 import { Btn } from '@/components/shared/Btn';
 import { useAuthStore } from '@/store/auth.store';
+import { resolveHomeRoute } from '@/lib/onboarding';
 
 export default function WelcomeScreen() {
   const { colors, direction } = useTheme();
-  const { isAuthenticated, role } = useAuthStore();
+  const { isAuthenticated, role, tenantId, userPlan, onboardingCompleted } = useAuthStore();
 
   if (isAuthenticated) {
-    console.log('WelcomeScreen: isAuthenticated, role', isAuthenticated, role);
-    return <Redirect href={role === 'COACH' ? '/(coach)' : '/(app)'} />;
+    return <Redirect href={resolveHomeRoute({ role, tenantId, userPlan, onboardingCompleted })} />;
   }
 
   return (

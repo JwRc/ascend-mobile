@@ -192,7 +192,7 @@ export default function SignupScreen() {
         name: d.cardholderName.trim(),
       });
 
-      const { error: stripeErr } = await confirmSetupIntent(clientSecret, {
+      const { error: stripeErr, setupIntent } = await confirmSetupIntent(clientSecret, {
         paymentMethodType: 'Card',
         paymentMethodData: { paymentMethodId },
       });
@@ -201,10 +201,17 @@ export default function SignupScreen() {
         return;
       }
 
+      await api.post('/users/me/complete-onboarding', { setupIntentId: setupIntent?.id });
+
       const { data: sessionData } = await authClient.getSession();
       const u = (sessionData as any)?.user;
       const userRole: UserRole = role === 'coach' ? 'COACH' : 'STUDENT';
-      setSession(u?.id ?? '', u?.email ?? d.email, userRole, { name: u?.name ?? d.name ?? null });
+      setSession(u?.id ?? '', u?.email ?? d.email, userRole, {
+        name: u?.name ?? d.name ?? null,
+        tenantId: u?.tenantId ?? null,
+        userPlan: u?.userPlan ?? null,
+        onboardingCompleted: true,
+      });
       await refreshRememberMeToken(true);
 
       router.replace(role === 'coach' ? '/(coach)' : '/(app)');

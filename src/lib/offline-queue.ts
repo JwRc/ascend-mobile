@@ -36,7 +36,7 @@ const KEY = 'ascentio-offline-queue';
 
 type GoalType = 'LOSE' | 'GAIN' | 'MAINTAIN';
 type ProfilePatch = Partial<
-  Pick<StudentProfile, 'name' | 'units' | 'heightCm' | 'activityLevel' | 'reminders'>
+  Pick<StudentProfile, 'name' | 'units' | 'heightCm' | 'activityLevel' | 'reminders' | 'startWeight'>
 >;
 type TemplateFields = { name: string; exercises: string[]; targetMin: number | null };
 type ProgramBody = {

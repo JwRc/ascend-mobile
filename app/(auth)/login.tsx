@@ -13,6 +13,7 @@ import { Field, StyledInput } from '@/components/shared/Field';
 import { useAuthStore, type UserRole } from '@/store/auth.store';
 import { authClient, persistToken, refreshRememberMeToken } from '@/lib/auth';
 import { identify } from '@/lib/analytics';
+import { resolveHomeRoute } from '@/lib/onboarding';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -69,10 +70,18 @@ export default function LoginScreen() {
       if (token) await persistToken(token);
       const user = (data as any).user;
       const role: UserRole = user?.role === 'COACH' ? 'COACH' : 'STUDENT';
-      setSession(user?.id ?? '', user?.email ?? email, role, { name: user?.name ?? null, tenantId: user?.tenantId ?? null });
+      const tenantId = user?.tenantId ?? null;
+      const userPlan = user?.userPlan ?? null;
+      const onboardingCompleted = user?.onboardingCompletedAt != null;
+      setSession(user?.id ?? '', user?.email ?? email, role, {
+        name: user?.name ?? null,
+        tenantId,
+        userPlan,
+        onboardingCompleted,
+      });
       identify(user?.id ?? '', role.toLowerCase());
       await refreshRememberMeToken(true);
-      router.replace(role === 'COACH' ? '/(coach)' : '/(app)');
+      router.replace(resolveHomeRoute({ role, tenantId, userPlan, onboardingCompleted }));
     } catch (e: any) {
       const status = e?.status ?? e?.response?.status ?? e?.statusCode;
       const code = e?.code ?? e?.response?.data?.code;
@@ -96,10 +105,21 @@ export default function LoginScreen() {
     const { data } = await authClient.getSession();
     const user = (data as any)?.user;
     const role: UserRole = user?.role === 'COACH' ? 'COACH' : 'STUDENT';
-    setSession(user?.id ?? '', user?.email ?? '', role, { name: user?.name ?? null, tenantId: user?.tenantId ?? null });
+    const tenantId = user?.tenantId ?? null;
+    const userPlan = user?.userPlan ?? null;
+    // Sinal vindo do backend (não inferido aqui) — só ele decide se o próximo
+    // usuário de login social (primeiro acesso) precisa passar pelo onboarding
+    // antes de entrar no app. Ver src/lib/onboarding.ts.
+    const onboardingCompleted = user?.onboardingCompletedAt != null;
+    setSession(user?.id ?? '', user?.email ?? '', role, {
+      name: user?.name ?? null,
+      tenantId,
+      userPlan,
+      onboardingCompleted,
+    });
     identify(user?.id ?? '', role.toLowerCase());
     await refreshRememberMeToken(true);
-    router.replace(role === 'COACH' ? '/(coach)' : '/(app)');
+    router.replace(resolveHomeRoute({ role, tenantId, userPlan, onboardingCompleted }));
   }
 
   async function handleGoogleLogin() {
